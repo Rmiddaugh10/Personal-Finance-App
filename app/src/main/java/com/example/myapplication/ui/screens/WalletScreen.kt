@@ -735,16 +735,14 @@ fun AddEditShiftDialog(
         )
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
@@ -759,12 +757,13 @@ fun AddEditShiftDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .width(360.dp)  // Fixed width
-                        .height(400.dp)
+                        .padding(end = 8.dp)  // Small padding to prevent edge touching
                 ) {
                     DatePicker(
                         state = datePickerState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp),
                         showModeToggle = false
                     )
                 }

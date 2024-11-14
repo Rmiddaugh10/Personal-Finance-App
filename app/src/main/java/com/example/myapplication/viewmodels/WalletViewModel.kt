@@ -142,7 +142,7 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         viewModelScope.launch {
             repository.getShiftsForPayPeriod(
                 employeeId = "current_user",
-                startDate = LocalDate.now(),
+                startDate = LocalDate.now().minusMonths(1),  // Include past month
                 endDate = LocalDate.now().plusMonths(3)
             ).collect { shifts ->
                 _shifts.value = shifts
