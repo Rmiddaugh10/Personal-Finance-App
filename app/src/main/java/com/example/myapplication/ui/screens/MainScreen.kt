@@ -15,10 +15,15 @@ import com.example.myapplication.data.ExpenseRepository
 import com.example.myapplication.ui.theme.navigation.ScreenWithBottomBar
 import com.example.myapplication.viewmodels.ExpenseViewModelFactory
 import com.example.myapplication.viewmodels.MainViewModel
+import com.example.myapplication.viewmodels.WalletViewModel
+import com.example.myapplication.viewmodels.WalletViewModelFactory
 
 @Composable
 fun MainScreen(navController: NavHostController, repository: ExpenseRepository, onImportClick: () -> Unit) {
     val viewModel: MainViewModel = viewModel(factory = ExpenseViewModelFactory(repository))
+    val walletViewModelFactory = WalletViewModelFactory(repository)
+    val walletViewModel: WalletViewModel = viewModel(factory = walletViewModelFactory)
+
     val expenses by viewModel.expenses.collectAsState()
     val budgetComparisons by viewModel.filteredComparisons.collectAsState()
 
@@ -33,7 +38,7 @@ fun MainScreen(navController: NavHostController, repository: ExpenseRepository, 
                 FinanceSection(navController = navController, repository = repository)
             }
             item {
-                CardsSection()
+                CardsSection(viewModel = walletViewModel)
             }
             item {
                 OverviewSection(viewModel = viewModel)

@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,16 +20,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.R
 import com.example.myapplication.data.cards
+import com.example.myapplication.viewmodels.WalletViewModel
 
 
 @Composable
-fun CardsSection() {
+fun CardsSection(viewModel: WalletViewModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -69,7 +73,7 @@ fun CardsSection() {
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(cards.size) { index ->
-                EnhancedCardItem(index)
+                EnhancedCardItem(index = index, viewModel = viewModel)
             }
         }
     }
@@ -77,8 +81,10 @@ fun CardsSection() {
 
 
 
+
 @Composable
-fun EnhancedCardItem(index: Int) {
+fun EnhancedCardItem(index: Int, viewModel: WalletViewModel) {
+    val context = LocalContext.current
     val card = cards[index]
     var lastItemPaddingEnd = 0.dp
     if (index == cards.size - 1) {
@@ -98,7 +104,37 @@ fun EnhancedCardItem(index: Int) {
             modifier = Modifier
                 .width(250.dp)
                 .height(170.dp)
-                .clickable { },
+                .clickable {
+                    when {
+                        card.cardNumber == "Community America Credit Union" && card.cardName == "Checking" -> {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.cacuonlinebanking.com/dbank/live/app/home/olb/history?accountId=D1"))
+                            context.startActivity(intent)
+                        }
+                        card.cardNumber == "Community America Credit Union" && card.cardName == "High Interest Savings" -> {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.cacuonlinebanking.com/dbank/live/app/home/olb/history?accountId=D3"))
+                            context.startActivity(intent)
+                        }
+                        card.cardNumber == "Other" && card.cardName == "Savings" -> {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.cacuonlinebanking.com/dbank/live/app/home/olb/history?accountId=D2"))
+                            context.startActivity(intent)
+                        }
+                        card.cardNumber == "Wallet" && card.cardName == "Cash" -> {
+                            viewModel.navigateToWalletScreen()
+                        }
+                        card.cardNumber == "Vanguard" && card.cardName == "401K" -> {
+                            val intent = context.packageManager.getLaunchIntentForPackage("vanguard.com")
+                            intent?.let { context.startActivity(it) }
+                        }
+                        card.cardNumber == "Alight Mobile" && card.cardName == "Pension" -> {
+                            val intent = context.packageManager.getLaunchIntentForPackage("alightmobile.com")
+                            intent?.let { context.startActivity(it) }
+                        }
+                        card.cardNumber == "Robinhood" && card.cardName == "Investments" -> {
+                            val intent = context.packageManager.getLaunchIntentForPackage("robinhood.com")
+                            intent?.let { context.startActivity(it) }
+                        }
+                    }
+                           },
             shape = RoundedCornerShape(25.dp)
         ) {
             Box(

@@ -1,5 +1,7 @@
 package com.example.myapplication.viewmodels
 
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.*
@@ -39,6 +41,11 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
     private val _payments = MutableStateFlow<List<PaymentInfo>>(emptyList())
     val payments: StateFlow<List<PaymentInfo>> = _payments.asStateFlow()
+
+    private val _navigateToWalletScreen = MutableLiveData<Unit>()
+    val navigateToWalletScreen: LiveData<Unit> get() = _navigateToWalletScreen
+
+    fun navigateToWalletScreen() { _navigateToWalletScreen.value = Unit }
 
     init {
         viewModelScope.launch {
