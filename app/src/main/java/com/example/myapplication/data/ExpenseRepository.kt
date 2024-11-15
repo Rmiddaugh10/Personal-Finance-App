@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.edit
 import com.example.myapplication.data.datastore.PreferencesKeys
+import com.example.myapplication.utils.PaycheckCalculator
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.abs
 
@@ -24,6 +26,7 @@ class ExpenseRepository(
     private val monthlyBudgetDao: MonthlyBudgetDao,
     private val budgetComparisonDao: BudgetComparisonDao,
     private val pinnedCategoryDao: PinnedCategoryDao,
+    private val paymentCalculationDao: PaymentCalculationDao,
     private val walletDao: WalletDao,
     private val shiftDao: ShiftDao,
     private val payPeriodDao: PayPeriodDao,
@@ -308,6 +311,44 @@ class ExpenseRepository(
         return expenseDao.transactionExists(year, month, day, amount, description)
     }
 
+    fun getPaymentCalculations(payPeriodId: Long): Flow<PaymentCalculationWithDeductions> {
+        return paymentCalculationDao.getCalculationWithDeductions(payPeriodId)
+    }
+
+    suspend fun savePaymentCalculation(
+        payPeriodId: Long,
+        calculation: PaycheckCalculation
+    ) {
+        // Delete existing calculations for this pay period
+        paymentCalculationDao.deleteCalculationsForPayPeriod(payPeriodId)
+
+        // Create new calculation entity
+        val calculationEntity = PaymentCalculationEntity(
+            payPeriodId = payPeriodId,
+            regularHours = calculation.regularHours,
+            overtimeHours = calculation.overtimeHours,
+            weekendHours = calculation.weekendHours,
+            nightHours = calculation.nightHours,
+            grossAmount = calculation.grossPay,
+            netAmount = calculation.netPay,
+            calculatedAt = LocalDateTime.now()
+        )
+
+        // Create deduction entities
+        val deductionEntities = calculation.deductions.map { (name, amount) ->
+            PaymentDeductionEntity(
+                paymentCalculationId = 0, // This will be set by insertCalculationWithDeductions
+                name = name,
+                amount = amount
+            )
+        }
+
+        // Save both calculation and deductions
+        paymentCalculationDao.insertCalculationWithDeductions(
+            calculationEntity,
+            deductionEntities
+        )
+    }
 
     // Pay period related methods
     fun getUpcomingPayPeriods(): Flow<List<PayPeriod>> =
@@ -344,6 +385,7 @@ class ExpenseRepository(
             endDate = endDate.toEpochDay()
         ).map { shifts -> shifts.map { it.toDomainModel() } }
     }
+
     suspend fun insertShift(
         employeeId: String,
         date: LocalDate,
@@ -351,10 +393,17 @@ class ExpenseRepository(
         endTime: LocalTime,
         breakDurationMinutes: Long,
         isWeekend: Boolean,
-        isNightShift: Boolean,
         actualHoursWorked: Double?,
         status: String
     ) {
+        val settings = getPaySettings()
+        val calculatedIsNightShift = isNightShiftPeriod(
+            startTime,
+            endTime,
+            settings.hourlySettings.nightShiftStart,
+            settings.hourlySettings.nightShiftEnd
+        )
+
         val shift = WorkShift(
             employeeId = employeeId,
             date = date,
@@ -362,11 +411,46 @@ class ExpenseRepository(
             endTime = endTime,
             breakDuration = Duration.ofMinutes(breakDurationMinutes),
             isWeekend = isWeekend,
-            isNightShift = isNightShift,
+            isNightShift = calculatedIsNightShift,
             actualHoursWorked = actualHoursWorked,
             status = status
         )
         shiftDao.insertShift(shift.toEntity())
+    }
+
+    suspend fun deleteShift(shift: WorkShift) {
+        shiftDao.deleteShift(shift.toEntity())
+
+        // Get current settings
+        val currentSettings = getPaySettings()
+        val payPeriod = getCurrentPayPeriod()
+
+        // Update calculations
+        payPeriod?.let { period ->
+            payPeriodDao.updatePayPeriodCalculations(
+                employeeId = "current_user",
+                paySettings = currentSettings,
+                shiftDao = shiftDao  // Pass the shiftDao
+            )
+        }
+    }
+
+    private fun isNightShiftPeriod(
+        startTime: LocalTime,
+        endTime: LocalTime,
+        nightShiftStart: Int,
+        nightShiftEnd: Int
+    ): Boolean {
+        val nightStart = LocalTime.of(nightShiftStart, 0)
+        val nightEnd = LocalTime.of(nightShiftEnd, 0)
+
+        return if (nightShiftStart > nightShiftEnd) {
+            // Overnight shift (e.g., 18-6)
+            startTime >= nightStart || endTime <= nightEnd
+        } else {
+            // Same day shift
+            startTime >= nightStart && endTime <= nightEnd
+        }
     }
 
     suspend fun updateWalletBalance(balance: WalletBalance) {
@@ -390,125 +474,28 @@ class ExpenseRepository(
         shiftDao.updateShift(shift.toEntity())
     }
 
-    suspend fun saveWorkShift(shift: WorkShift) {
-        try {
-            shiftDao.insertShift(shift.toEntity())
-        } catch (e: Exception) {
-            Log.e("ExpenseRepository", "Error saving work shift", e)
-            throw e
-        }
-    }
-
     // Paycheck Calculation
     suspend fun calculatePaychecks(): List<PaycheckCalculation> {
         val settings = getPaySettings()
-
-        return when (settings.employmentType) {
-            EmploymentType.SALARY -> calculateSalaryPaychecks(settings)
-            EmploymentType.HOURLY -> calculateHourlyPaychecks(settings)
-        }
-    }
-
-    private suspend fun calculateSalaryPaychecks(settings: PaySettings): List<PaycheckCalculation> {
-        val payPeriods = payPeriodDao.getUpcomingPayPeriods(LocalDate.now()).first()
-        val annualSalary = settings.payRates.basePay
-
-        return payPeriods.map { period ->
-            val payPerPeriod = when (settings.payRates.payFrequency) {
-                PayFrequency.WEEKLY -> annualSalary / 52
-                PayFrequency.BI_WEEKLY -> annualSalary / 26
-                PayFrequency.SEMI_MONTHLY -> annualSalary / 24
-                PayFrequency.MONTHLY -> annualSalary / 12
-            }
-
-            calculatePaycheckWithDeductions(payPerPeriod, settings)
-        }
-    }
-
-    private suspend fun calculateHourlyPaychecks(settings: PaySettings): List<PaycheckCalculation> {
-        val shifts = getUpcomingShifts().first()
         val payPeriods = payPeriodDao.getUpcomingPayPeriods(LocalDate.now()).first()
 
         return payPeriods.map { period ->
-            val periodShifts = shifts.filter { shift ->
-                shift.date >= period.startDate && shift.date <= period.endDate
-            }
+            val periodShifts = getShiftsForPayPeriod(
+                employeeId = "current_user",
+                startDate = period.startDate,
+                endDate = period.endDate
+            ).first()
 
-            val regularHours = periodShifts.sumOf { calculateRegularHours(it) }
-            val overtimeHours = periodShifts.sumOf { calculateOvertimeHours(it) }
-            val weekendHours = periodShifts.filter { it.isWeekend }.sumOf { calculateShiftHours(it) }
-            val nightHours = periodShifts.filter { it.isNightShift }.sumOf { calculateShiftHours(it) }
+            val calculation = PaycheckCalculator.calculatePaycheck(
+                shifts = periodShifts,
+                settings = settings
+            )
 
-            val rates = settings.payRates
-            val grossPay = (regularHours * rates.basePay) +
-                    (overtimeHours * rates.basePay * rates.overtimeMultiplier) +
-                    (weekendHours * rates.weekendRate) +
-                    (nightHours * rates.nightDifferential)
+            // Save the calculation
+            savePaymentCalculation(period.id, calculation)
 
-            calculatePaycheckWithDeductions(grossPay, settings)
+            calculation
         }
-    }
-
-    private fun calculatePaycheckWithDeductions(
-        grossPay: Double,
-        settings: PaySettings
-    ): PaycheckCalculation {
-        val deductions = mutableMapOf<String, Double>()
-        val taxSettings = settings.taxSettings
-
-        // Calculate tax deductions
-        if (taxSettings.federalWithholding) {
-            deductions["Federal Tax"] = grossPay * 0.15 // Example rate
-        }
-        if (taxSettings.stateTaxEnabled) {
-            deductions["State Tax"] = grossPay * (taxSettings.stateWithholdingPercentage / 100)
-        }
-        if (taxSettings.cityTaxEnabled) {
-            deductions["City Tax"] = grossPay * (taxSettings.cityWithholdingPercentage / 100)
-        }
-        if (taxSettings.medicareTaxEnabled) {
-            deductions["Medicare"] = grossPay * 0.0145 // 1.45%
-        }
-        if (taxSettings.socialSecurityTaxEnabled) {
-            deductions["Social Security"] = (grossPay * 0.062).coerceAtMost(147000 * 0.062) // 6.2% up to cap
-        }
-
-        // Add custom deductions
-        settings.deductions.forEach { deduction ->
-            val deductionAmount = when (deduction.frequency) {
-                DeductionFrequency.PER_PAYCHECK -> deduction.amount
-                DeductionFrequency.MONTHLY -> deduction.amount / 2 // Assuming semi-monthly pay
-                DeductionFrequency.ANNUAL -> deduction.amount / 24 // Assuming semi-monthly pay
-            }
-            deductions[deduction.name] = deductionAmount
-        }
-
-        val totalDeductions = deductions.values.sum()
-
-        return PaycheckCalculation(
-            grossPay = grossPay,
-            netPay = grossPay - totalDeductions,
-            regularHours = 0.0,
-            overtimeHours = 0.0,
-            weekendHours = 0.0,
-            nightHours = 0.0,
-            deductions = deductions
-        )
-    }
-
-    private fun calculateShiftHours(shift: WorkShift): Double {
-        val duration = java.time.Duration.between(shift.startTime, shift.endTime)
-        return (duration.toMinutes() - shift.breakDuration.toMinutes()) / 60.0
-    }
-
-    private fun calculateRegularHours(shift: WorkShift): Double {
-        val hours = calculateShiftHours(shift)
-        return if (hours > 8) 8.0 else hours
-    }
-
-    private fun calculateOvertimeHours(shift: WorkShift): Double {
-        val hours = calculateShiftHours(shift)
-        return if (hours > 8) hours - 8 else 0.0
     }
 
     suspend fun getWalletBalance(): WalletBalance? {
@@ -524,6 +511,7 @@ class ExpenseRepository(
             null
         }
     }
+
     fun generatePayPeriodDates(
         startDate: LocalDate = LocalDate.now(),
         count: Int = 3
@@ -541,7 +529,4 @@ class ExpenseRepository(
         }
     }
 
-    suspend fun updatePayPeriodCalculations(employeeId: String, paySettings: PaySettings) {
-        payPeriodDao.updatePayPeriodCalculations(employeeId, paySettings, shiftDao)
-    }
 }

@@ -21,6 +21,7 @@ class MyApplication : Application() {
             walletDao = database.walletDao(),
             shiftDao = database.shiftDao(),
             payPeriodDao = database.payPeriodDao(),
+            paymentCalculationDao = database.paymentCalculationDao(),
             dataStore = dataStore,
             scope = applicationScope
         )

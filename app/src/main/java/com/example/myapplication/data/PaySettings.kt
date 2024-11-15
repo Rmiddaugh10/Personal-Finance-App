@@ -1,8 +1,8 @@
 package com.example.myapplication.data
 
 data class PaySettings(
-    val employmentType: EmploymentType = EmploymentType.HOURLY,
-    val payRates: PayRates = PayRates(),
+    val salarySettings: SalarySettings = SalarySettings(),
+    val hourlySettings: HourlySettings = HourlySettings(),
     val taxSettings: TaxSettings = TaxSettings(),
     val deductions: List<Deduction> = emptyList()
 ) {
@@ -11,18 +11,27 @@ data class PaySettings(
     }
 }
 
-enum class EmploymentType {
-    HOURLY, SALARY
-}
+data class SalarySettings(
+    val enabled: Boolean = false,
+    val annualSalary: Double = 0.0,
+    val payFrequency: PayFrequency = PayFrequency.BI_WEEKLY
+)
 
-data class PayRates(
-    val basePay: Double = 0.0,
-    val payFrequency: PayFrequency = PayFrequency.BI_WEEKLY,
+data class HourlySettings(
+    val enabled: Boolean = false,
+    val baseRate: Double = 0.0,
     val weekendRate: Double = 0.0,
     val nightDifferential: Double = 0.0,
     val overtimeMultiplier: Double = 1.5,
-    val holidayRate: Double = 0.0
+    val holidayRate: Double = 0.0,
+    val nightShiftStart: Int = 18, // 6 PM
+    val nightShiftEnd: Int = 6,    // 6 AM
+    val payFrequency: PayFrequency = PayFrequency.BI_WEEKLY
 )
+
+enum class EmploymentType {
+    HOURLY, SALARY
+}
 
 enum class PayFrequency {
     WEEKLY, BI_WEEKLY, SEMI_MONTHLY, MONTHLY

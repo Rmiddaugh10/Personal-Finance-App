@@ -127,7 +127,6 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
                     endTime = shift.endTime,
                     breakDurationMinutes = shift.breakDuration.toMinutes(),
                     isWeekend = shift.isWeekend,
-                    isNightShift = shift.isNightShift,
                     actualHoursWorked = shift.actualHoursWorked,
                     status = shift.status
                 )
@@ -162,28 +161,72 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         }
     }
 
-    fun updateEmploymentType(type: EmploymentType) {
+    fun updateSalarySettings(
+        enabled: Boolean,
+        annualSalary: Double,
+        frequency: PayFrequency
+    ) {
         viewModelScope.launch {
             try {
-                val updatedSettings = _paySettings.value.copy(employmentType = type)
+                val currentSettings = _paySettings.value
+                val updatedSettings = currentSettings.copy(
+                    salarySettings = SalarySettings(
+                        enabled = enabled,
+                        annualSalary = annualSalary,
+                        payFrequency = frequency
+                    )
+                )
                 repository.savePaySettings(updatedSettings)
                 _paySettings.value = updatedSettings
                 recalculatePaychecks()
             } catch (e: Exception) {
-                _error.value = "Error updating employment type: ${e.message}"
+                _error.value = "Error updating salary settings: ${e.message}"
             }
         }
     }
 
-    fun updatePayRates(rates: PayRates) {
+    fun updateHourlySettings(
+        enabled: Boolean,
+        baseRate: Double,
+        weekendRate: Double,
+        nightDifferential: Double,
+        overtimeMultiplier: Double,
+        nightShiftStart: Int,
+        nightShiftEnd: Int,
+        frequency: PayFrequency
+    ) {
         viewModelScope.launch {
             try {
-                val updatedSettings = _paySettings.value.copy(payRates = rates)
+                val currentSettings = _paySettings.value
+                val updatedSettings = currentSettings.copy(
+                    hourlySettings = HourlySettings(
+                        enabled = enabled,
+                        baseRate = baseRate,
+                        weekendRate = weekendRate,
+                        nightDifferential = nightDifferential,
+                        overtimeMultiplier = overtimeMultiplier,
+                        nightShiftStart = nightShiftStart,
+                        nightShiftEnd = nightShiftEnd,
+                        payFrequency = frequency
+                    )
+                )
                 repository.savePaySettings(updatedSettings)
                 _paySettings.value = updatedSettings
                 recalculatePaychecks()
             } catch (e: Exception) {
-                _error.value = "Error updating pay rates: ${e.message}"
+                _error.value = "Error updating hourly settings: ${e.message}"
+            }
+        }
+    }
+
+    fun deleteShift(shift: WorkShift) {
+        viewModelScope.launch {
+            try {
+                repository.deleteShift(shift)
+                loadShifts() // Refresh shifts after deletion
+                recalculatePaychecks()
+            } catch (e: Exception) {
+                _error.value = "Error deleting shift: ${e.message}"
             }
         }
     }
@@ -237,44 +280,6 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
             } catch (e: Exception) {
                 _error.value = "Error calculating paychecks: ${e.message}"
             }
-        }
-    }
-
-    private fun calculateDeductions(grossPay: Double, settings: PaySettings): Map<String, Double> {
-        val deductions = mutableMapOf<String, Double>()
-
-        // Tax calculations
-        if (settings.taxSettings.federalWithholding) {
-            deductions["Federal Tax"] = grossPay * 0.15 // Example rate
-        }
-        if (settings.taxSettings.stateTaxEnabled) {
-            deductions["State Tax"] = grossPay * (settings.taxSettings.stateWithholdingPercentage / 100)
-        }
-        if (settings.taxSettings.cityTaxEnabled) {
-            deductions["City Tax"] = grossPay * (settings.taxSettings.cityWithholdingPercentage / 100)
-        }
-
-        // Add custom deductions
-        settings.deductions.forEach { deduction ->
-            deductions[deduction.name] = when (deduction.frequency) {
-                DeductionFrequency.PER_PAYCHECK -> deduction.amount
-                DeductionFrequency.MONTHLY -> deduction.amount / 2 // Assuming semi-monthly pay
-                DeductionFrequency.ANNUAL -> deduction.amount / 24 // Assuming semi-monthly pay
-            }
-        }
-
-        return deductions
-    }
-
-    private fun calculateShiftHours(shift: WorkShift): Double {
-        val duration = Duration.between(shift.startTime, shift.endTime)
-        return (duration.toMinutes() - shift.breakDuration.toMinutes()) / 60.0
-    }
-
-    private fun updatePayments() {
-        viewModelScope.launch {
-            val newPayments = calculateUpcomingPayments()
-            _payments.value = newPayments
         }
     }
 

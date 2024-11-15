@@ -1,125 +1,17 @@
 package com.example.myapplication.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.TextButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.data.*
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PayRateDialog(
-    currentRates: PayRates,
-    employmentType: EmploymentType,
-    onDismiss: () -> Unit,
-    onConfirm: (PayRates) -> Unit
-) {
-    var basePay by remember { mutableStateOf(currentRates.basePay.toString()) }
-    var payFrequency by remember { mutableStateOf(currentRates.payFrequency) }
-    var weekendRate by remember { mutableStateOf(currentRates.weekendRate.toString()) }
-    var nightDifferential by remember { mutableStateOf(currentRates.nightDifferential.toString()) }
-    var overtimeMultiplier by remember { mutableStateOf(currentRates.overtimeMultiplier.toString()) }
-    var holidayRate by remember { mutableStateOf(currentRates.holidayRate.toString()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (employmentType == EmploymentType.SALARY) "Salary Settings" else "Pay Rate Settings") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = basePay,
-                    onValueChange = { basePay = it },
-                    label = {
-                        Text(if (employmentType == EmploymentType.SALARY) "Annual Salary" else "Base Hourly Rate")
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Pay Frequency Selection
-                Text("Pay Frequency", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PayFrequency.entries.forEach { frequency ->
-                        FilterChip(
-                            selected = payFrequency == frequency,
-                            onClick = { payFrequency = frequency },
-                            label = { Text(frequency.name.replace("_", " ")) }
-                        )
-                    }
-                }
-
-                if (employmentType == EmploymentType.HOURLY) {
-                    OutlinedTextField(
-                        value = weekendRate,
-                        onValueChange = { weekendRate = it },
-                        label = { Text("Weekend Rate") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = nightDifferential,
-                        onValueChange = { nightDifferential = it },
-                        label = { Text("Night Differential") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = overtimeMultiplier,
-                        onValueChange = { overtimeMultiplier = it },
-                        label = { Text("Overtime Multiplier") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = holidayRate,
-                        onValueChange = { holidayRate = it },
-                        label = { Text("Holiday Rate") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(
-                        PayRates(
-                            basePay = basePay.toDoubleOrNull() ?: 0.0,
-                            payFrequency = payFrequency,
-                            weekendRate = weekendRate.toDoubleOrNull() ?: 0.0,
-                            nightDifferential = nightDifferential.toDoubleOrNull() ?: 0.0,
-                            overtimeMultiplier = overtimeMultiplier.toDoubleOrNull() ?: 1.5,
-                            holidayRate = holidayRate.toDoubleOrNull() ?: 0.0
-                        )
-                    )
-                }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -359,4 +251,256 @@ fun DeductionDialog(
         }
     )
 }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SalarySettingsDialog(
+    currentSettings: SalarySettings,
+    onDismiss: () -> Unit,
+    onConfirm: (enabled: Boolean, salary: Double, frequency: PayFrequency) -> Unit
+) {
+    var annualSalary by remember { mutableStateOf(currentSettings.annualSalary.toString()) }
+    var payFrequency by remember { mutableStateOf(currentSettings.payFrequency) }
+    var enabled by remember { mutableStateOf(currentSettings.enabled) }
+    var error by remember { mutableStateOf<String?>(null) }
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Salary Settings") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Enable Salary")
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { enabled = it }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = annualSalary,
+                    onValueChange = {
+                        annualSalary = it
+                        error = null
+                    },
+                    label = { Text("Annual Salary") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+
+                Text("Pay Frequency", style = MaterialTheme.typography.labelMedium)
+                PayFrequency.entries.forEach { frequency ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = payFrequency == frequency,
+                                onClick = { payFrequency = frequency }
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = payFrequency == frequency,
+                            onClick = { payFrequency = frequency }
+                        )
+                        Text(
+                            text = frequency.name.lowercase().replace('_', ' '),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val salary = annualSalary.toDoubleOrNull()
+                    if (salary == null && enabled) {
+                        error = "Please enter a valid salary"
+                        return@Button
+                    }
+                    onConfirm(enabled, salary ?: 0.0, payFrequency)
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HourlySettingsDialog(
+    currentSettings: HourlySettings,
+    onDismiss: () -> Unit,
+    onConfirm: (HourlySettings) -> Unit
+) {
+    var settings by remember { mutableStateOf(currentSettings) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Hourly Settings") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Enable Hourly Pay")
+                    Switch(
+                        checked = settings.enabled,
+                        onCheckedChange = { enabled ->
+                            settings = settings.copy(enabled = enabled)
+                        }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = settings.baseRate.toString(),
+                    onValueChange = {
+                        settings = settings.copy(baseRate = it.toDoubleOrNull() ?: 0.0)
+                        error = null
+                    },
+                    label = { Text("Base Hourly Rate") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = settings.enabled
+                )
+
+                OutlinedTextField(
+                    value = settings.weekendRate.toString(),
+                    onValueChange = {
+                        settings = settings.copy(weekendRate = it.toDoubleOrNull() ?: 0.0)
+                    },
+                    label = { Text("Weekend Rate") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = settings.enabled
+                )
+
+                OutlinedTextField(
+                    value = settings.nightDifferential.toString(),
+                    onValueChange = {
+                        settings = settings.copy(nightDifferential = it.toDoubleOrNull() ?: 0.0)
+                    },
+                    label = { Text("Night Differential") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = settings.enabled
+                )
+
+                Text("Night Shift Hours", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = settings.nightShiftStart.toString(),
+                        onValueChange = {
+                            val value = it.toIntOrNull() ?: 0
+                            if (value in 0..23) {
+                                settings = settings.copy(nightShiftStart = value)
+                            }
+                        },
+                        label = { Text("Start Hour (0-23)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        enabled = settings.enabled
+                    )
+                    OutlinedTextField(
+                        value = settings.nightShiftEnd.toString(),
+                        onValueChange = {
+                            val value = it.toIntOrNull() ?: 0
+                            if (value in 0..23) {
+                                settings = settings.copy(nightShiftEnd = value)
+                            }
+                        },
+                        label = { Text("End Hour (0-23)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        enabled = settings.enabled
+                    )
+                }
+
+                Text("Pay Frequency", style = MaterialTheme.typography.labelMedium)
+                PayFrequency.entries.forEach { frequency ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = settings.payFrequency == frequency,
+                                onClick = {
+                                    settings = settings.copy(payFrequency = frequency)
+                                }
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = settings.payFrequency == frequency,
+                            onClick = {
+                                settings = settings.copy(payFrequency = frequency)
+                            }
+                        )
+                        Text(
+                            text = frequency.name.lowercase().replace('_', ' '),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (settings.enabled && settings.baseRate <= 0) {
+                        error = "Please enter a valid base rate"
+                        return@Button
+                    }
+                    onConfirm(settings)
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}

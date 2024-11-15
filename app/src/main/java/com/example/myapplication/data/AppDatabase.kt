@@ -1,15 +1,10 @@
 package com.example.myapplication.data
 
 import android.content.Context
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.TypeConverter
-import androidx.room.TypeConverters
+import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.myapplication.data.converter.DateConverter
-
 
 class Converters {
     @TypeConverter
@@ -44,13 +39,13 @@ class Converters {
         WorkShiftEntity::class,
         PayPeriodEntity::class,
         PayRateEntity::class,
-
+        PaymentCalculationEntity::class,
+        PaymentDeductionEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(DateConverter::class, Converters::class, WalletTypeConverters::class)
-
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun budgetCategoryDao(): BudgetCategoryDao
@@ -60,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun walletDao(): WalletDao
     abstract fun shiftDao(): ShiftDao
     abstract fun payPeriodDao(): PayPeriodDao
-
+    abstract fun paymentCalculationDao(): PaymentCalculationDao
 
     companion object {
         @Volatile
@@ -80,7 +75,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_7_8,
                         MIGRATION_8_9,
                         MIGRATION_9_10,
-                        MIGRATION_10_11
+                        MIGRATION_10_11,
+                        MIGRATION_11_12
                     )
                     .fallbackToDestructiveMigration()
                     .build()
@@ -91,19 +87,18 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Keep existing migration
+                // Existing migration logic
             }
         }
 
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Keep existing migration
+                // Existing migration logic
             }
         }
 
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create temporary table with correct schema
                 database.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `expenses_temp` (
@@ -118,8 +113,6 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """
                 )
-
-                // Copy existing data
                 database.execSQL(
                     """
                     INSERT INTO expenses_temp (
@@ -136,17 +129,13 @@ abstract class AppDatabase : RoomDatabase() {
                     FROM expenses
                 """
                 )
-
-                // Drop old table
                 database.execSQL("DROP TABLE expenses")
-
-                // Rename temp table to final
                 database.execSQL("ALTER TABLE expenses_temp RENAME TO expenses")
             }
         }
+
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create temporary tables with correct schema
                 database.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS expenses_temp (
@@ -161,8 +150,6 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """
                 )
-
-                // Copy data
                 database.execSQL(
                     """
                     INSERT INTO expenses_temp 
@@ -170,12 +157,8 @@ abstract class AppDatabase : RoomDatabase() {
                     FROM expenses
                 """
                 )
-
-                // Drop old table and rename new one
                 database.execSQL("DROP TABLE expenses")
                 database.execSQL("ALTER TABLE expenses_temp RENAME TO expenses")
-
-                // Recalculate budget comparisons
                 database.execSQL(
                     """
                     UPDATE budget_comparison 
@@ -195,9 +178,9 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create the pinned_categories table
                 database.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `pinned_categories` (
@@ -207,61 +190,55 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create wallet balance table
                 database.execSQL("""
-            CREATE TABLE IF NOT EXISTS `wallet_balance` (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                cashAmount REAL NOT NULL,
-                lastUpdated TEXT NOT NULL
-            )
-        """.trimIndent())
-
-                // Create work shifts table with correct column types
+                    CREATE TABLE IF NOT EXISTS `wallet_balance` (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        cashAmount REAL NOT NULL,
+                        lastUpdated TEXT NOT NULL
+                    )
+                """.trimIndent())
                 database.execSQL("""
-            CREATE TABLE IF NOT EXISTS `work_shifts` (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                employeeId TEXT NOT NULL,
-                date INTEGER NOT NULL,
-                startTime INTEGER NOT NULL,
-                endTime INTEGER NOT NULL,
-                breakDurationMinutes INTEGER NOT NULL,
-                isWeekend INTEGER NOT NULL,
-                isNightShift INTEGER NOT NULL,
-                actualHoursWorked REAL,
-                status TEXT NOT NULL
-            )
-        """.trimIndent())
-
-                // Create pay periods table
+                    CREATE TABLE IF NOT EXISTS `work_shifts` (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        employeeId TEXT NOT NULL,
+                        date INTEGER NOT NULL,
+                        startTime INTEGER NOT NULL,
+                        endTime INTEGER NOT NULL,
+                        breakDurationMinutes INTEGER NOT NULL,
+                        isWeekend INTEGER NOT NULL,
+                        isNightShift INTEGER NOT NULL,
+                        actualHoursWorked REAL,
+                        status TEXT NOT NULL
+                    )
+                """.trimIndent())
                 database.execSQL("""
-            CREATE TABLE IF NOT EXISTS `pay_periods` (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                employeeId TEXT NOT NULL,
-                startDate INTEGER NOT NULL,
-                endDate INTEGER NOT NULL,
-                payDate INTEGER NOT NULL,
-                isSalary INTEGER NOT NULL,
-                baseRate REAL
-            )
-        """.trimIndent())
-
-                // Create pay rates table
+                    CREATE TABLE IF NOT EXISTS `pay_periods` (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        employeeId TEXT NOT NULL,
+                        startDate INTEGER NOT NULL,
+                        endDate INTEGER NOT NULL,
+                        payDate INTEGER NOT NULL,
+                        isSalary INTEGER NOT NULL,
+                        baseRate REAL
+                    )
+                """.trimIndent())
                 database.execSQL("""
-            CREATE TABLE IF NOT EXISTS `pay_rates` (
-                employeeId TEXT PRIMARY KEY NOT NULL,
-                baseRate REAL NOT NULL,
-                weekendRate REAL NOT NULL,
-                nightDifferential REAL NOT NULL,
-                overtimeMultiplier REAL NOT NULL
-            )
-        """.trimIndent())
+                    CREATE TABLE IF NOT EXISTS `pay_rates` (
+                        employeeId TEXT PRIMARY KEY NOT NULL,
+                        baseRate REAL NOT NULL,
+                        weekendRate REAL NOT NULL,
+                        nightDifferential REAL NOT NULL,
+                        overtimeMultiplier REAL NOT NULL
+                    )
+                """.trimIndent())
             }
         }
+
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create payment calculations table
                 database.execSQL("""
                     CREATE TABLE IF NOT EXISTS payment_calculations (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -277,8 +254,6 @@ abstract class AppDatabase : RoomDatabase() {
                         ON DELETE CASCADE
                     )
                 """.trimIndent())
-
-                // Create payment deductions table
                 database.execSQL("""
                     CREATE TABLE IF NOT EXISTS payment_deductions (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -290,8 +265,6 @@ abstract class AppDatabase : RoomDatabase() {
                         ON DELETE CASCADE
                     )
                 """.trimIndent())
-
-                // Create indices for better query performance
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS idx_payment_calculations_pay_period_id ON payment_calculations(payPeriodId)"
                 )
@@ -300,5 +273,60 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add new columns to pay_periods table
+                database.execSQL("ALTER TABLE pay_periods ADD COLUMN salaryEnabled INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE pay_periods ADD COLUMN hourlyEnabled INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE pay_periods ADD COLUMN annualSalary REAL NOT NULL DEFAULT 0.0")
+
+                // Add new columns to pay_rates table
+                database.execSQL("ALTER TABLE pay_rates ADD COLUMN nightShiftStart INTEGER NOT NULL DEFAULT 18")
+                database.execSQL("ALTER TABLE pay_rates ADD COLUMN nightShiftEnd INTEGER NOT NULL DEFAULT 6")
+
+                // Drop the existing payment_calculations table
+                database.execSQL("DROP TABLE IF EXISTS payment_calculations")
+                // Recreate the payment_calculations table with the correct schema
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS payment_calculations (
+                id INTEGER PRIMARY KEY NOT NULL,
+                payPeriodId INTEGER NOT NULL,
+                regularHours REAL NOT NULL,
+                overtimeHours REAL NOT NULL,
+                weekendHours REAL NOT NULL,
+                nightHours REAL NOT NULL,
+                grossAmount REAL NOT NULL,
+                netAmount REAL NOT NULL,
+                calculatedAt TEXT NOT NULL,
+                FOREIGN KEY (payPeriodId) REFERENCES pay_periods(id) ON DELETE CASCADE
+            )
+        """)
+                // Create the index with the correct name
+                database.execSQL("""
+            CREATE INDEX IF NOT EXISTS index_payment_calculations_payPeriodId 
+            ON payment_calculations(payPeriodId)
+        """)
+
+                // Drop the existing payment_deductions table
+                database.execSQL("DROP TABLE IF EXISTS payment_deductions")
+                // Recreate the payment_deductions table with the correct schema
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS payment_deductions (
+                id INTEGER PRIMARY KEY NOT NULL,
+                paymentCalculationId INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                FOREIGN KEY (paymentCalculationId) REFERENCES payment_calculations(id) ON DELETE CASCADE
+            )
+        """)
+                // Create the index with the correct name
+                database.execSQL("""
+            CREATE INDEX IF NOT EXISTS idx_payment_deductions_calculation_id 
+            ON payment_deductions(paymentCalculationId)
+        """)
+            }
+        }
     }
 }
+

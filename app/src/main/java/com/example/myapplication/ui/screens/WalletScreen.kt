@@ -23,10 +23,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.capitalize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -34,18 +32,19 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.data.*
 import com.example.myapplication.ui.components.DeductionDialog
-import com.example.myapplication.ui.components.PayRateDialog
+import com.example.myapplication.ui.components.HourlySettingsDialog
+import com.example.myapplication.ui.components.SalarySettingsDialog
 import com.example.myapplication.ui.components.TaxSettingsDialog
 import com.example.myapplication.viewmodels.WalletViewModel
 import com.example.myapplication.viewmodels.WalletViewModelFactory
 import java.text.NumberFormat
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-
-private val CALENDAR_DATE_FORMATTER = DateTimeFormatter.ofPattern("EEEE, MMM dd, yyyy")
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,104 +159,165 @@ private fun CashWalletSection(viewModel: WalletViewModel) {
 
 @Composable
 private fun PaychecksSection(viewModel: WalletViewModel) {
-    val payments by viewModel.payments.collectAsState(initial = emptyList())
-    val totalAmount = remember(payments) {
-        payments.sumOf { it.amount }
-    }
+    val paychecks by viewModel.paychecks.collectAsState()
+    val settings by viewModel.paySettings.collectAsState()
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // Tab Row for switching between Salary and Hourly views
+        if (settings.salarySettings.enabled && settings.hourlySettings.enabled) {
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Tab(
+                    selected = selectedTabIndex == 0,
+                    onClick = { selectedTabIndex = 0 }
+                ) {
+                    Text(
+                        text = "Combined",
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+                Tab(
+                    selected = selectedTabIndex == 1,
+                    onClick = { selectedTabIndex = 1 }
+                ) {
+                    Text(
+                        text = "Salary",
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+                Tab(
+                    selected = selectedTabIndex == 2,
+                    onClick = { selectedTabIndex = 2 }
+                ) {
+                    Text(
+                        text = "Hourly",
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Summary Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Upcoming Payments",
+                    text = "Pay Summary",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                payments.forEachIndexed { index, payment ->
-                    PaymentRow(payment = payment)
-                    if (index < payments.lastIndex) {
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
+                val totalPay = paychecks.sumOf { it.grossPay }
+                val totalNetPay = paychecks.sumOf { it.netPay }
+
+                PaySummaryRow("Gross Pay", totalPay)
+                PaySummaryRow("Net Pay", totalNetPay)
+
+                if (settings.hourlySettings.enabled) {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = "Hours Breakdown",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val totalRegularHours = paychecks.sumOf { it.regularHours }
+                    val totalOvertimeHours = paychecks.sumOf { it.overtimeHours }
+                    val totalWeekendHours = paychecks.sumOf { it.weekendHours }
+                    val totalNightHours = paychecks.sumOf { it.nightHours }
+
+                    HoursSummaryRow("Regular Hours", totalRegularHours)
+                    HoursSummaryRow("Overtime Hours", totalOvertimeHours)
+                    HoursSummaryRow("Weekend Hours", totalWeekendHours)
+                    HoursSummaryRow("Night Hours", totalNightHours)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Total Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        // Paychecks List
+        Text(
+            text = "Upcoming Paychecks",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Monthly Total",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = NumberFormat.getCurrencyInstance().format(totalAmount),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+            val filteredPaychecks = when (selectedTabIndex) {
+                1 -> paychecks.filter { settings.salarySettings.enabled }
+                2 -> paychecks.filter { settings.hourlySettings.enabled }
+                else -> paychecks
+            }
+
+            items(filteredPaychecks) { paycheck ->
+                PaycheckCard(
+                    paycheck = paycheck,
+                    showHourlyDetails = settings.hourlySettings.enabled
                 )
             }
         }
     }
 }
-
 @Composable
-private fun PaymentRow(payment: PaymentInfo) {
+private fun PaySummaryRow(label: String, amount: Double) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
-            Text(
-                text = payment.employeeName,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = if (payment.isEstimate) "Estimated" else "Confirmed",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (payment.isEstimate)
-                    MaterialTheme.colorScheme.tertiary
-                else
-                    MaterialTheme.colorScheme.primary
-            )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = NumberFormat.getCurrencyInstance().format(payment.amount),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = payment.date.format(DateTimeFormatter.ofPattern("MMM dd")),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Text(text = label)
+        Text(
+            text = NumberFormat.getCurrencyInstance(Locale.US).format(amount),
+            fontWeight = FontWeight.Bold
+        )
     }
 }
+@Composable
+private fun HoursSummaryRow(label: String, hours: Double) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = String.format("%.1f hrs", hours),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 
 @Composable
 private fun ScheduleSection(viewModel: WalletViewModel) {
     val shifts by viewModel.shifts.collectAsState()
     var showAddShiftDialog by remember { mutableStateOf(false) }
     var selectedShift by remember { mutableStateOf<WorkShift?>(null) }
+    var showDeleteConfirmation by remember { mutableStateOf<WorkShift?>(null) }
 
     Column(
         modifier = Modifier
@@ -288,7 +348,7 @@ private fun ScheduleSection(viewModel: WalletViewModel) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 80.dp) // Add padding for bottom nav
+                .padding(bottom = 80.dp)
         ) {
             items(
                 items = shifts.groupBy { it.date }.toList(),
@@ -297,7 +357,8 @@ private fun ScheduleSection(viewModel: WalletViewModel) {
                 DayShiftsCard(
                     date = date,
                     shifts = dayShifts,
-                    onShiftClick = { selectedShift = it }
+                    onShiftClick = { selectedShift = it },
+                    onDeleteClick = { showDeleteConfirmation = it }
                 )
             }
         }
@@ -324,21 +385,55 @@ private fun ScheduleSection(viewModel: WalletViewModel) {
                             date = date,
                             startTime = start,
                             endTime = end,
-                            breakDuration = java.time.Duration.ofMinutes(breakLength)
+                            breakDuration = Duration.ofMinutes(breakLength)
                         )
                     )
                     selectedShift = null
                 }
             )
         }
+
+        // Delete confirmation dialog
+        showDeleteConfirmation?.let { shift ->
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmation = null },
+                title = { Text("Confirm Delete") },
+                text = { Text("Are you sure you want to delete this shift?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteShift(shift)
+                            showDeleteConfirmation = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmation = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
+}
+
+private fun calculateShiftHours(shift: WorkShift): Double {
+    val duration = Duration.between(shift.startTime, shift.endTime)
+    return (duration.toMinutes() - shift.breakDuration.toMinutes()) / 60.0
 }
 
 @Composable
 private fun PaySettingsSection(viewModel: WalletViewModel) {
     var showTaxDialog by remember { mutableStateOf(false) }
-    var showPayRateDialog by remember { mutableStateOf(false) }
     var showDeductionDialog by remember { mutableStateOf(false) }
+    var showSalarySettingsDialog by remember { mutableStateOf(false) }
+    var showHourlySettingsDialog by remember { mutableStateOf(false) }
+
     val settings = viewModel.paySettings.collectAsState().value
     val error by viewModel.error.collectAsState()
 
@@ -354,57 +449,114 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        EmploymentType.entries.forEach { type ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .clickable { showPayRateDialog = true }
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = type.name.lowercase().capitalize(Locale.current),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Switch(
-                            checked = settings.employmentType == type,
-                            onCheckedChange = { viewModel.updateEmploymentType(type) }
-                        )
-                    }
-
-                    if (settings.employmentType == type) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (type == EmploymentType.SALARY) {
-                            Text(
-                                text = "Annual Salary: $${settings.payRates.basePay}",
-                                style = MaterialTheme.typography.bodyLarge
+        // Salary Settings Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .clickable { showSalarySettingsDialog = true }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Salary",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Switch(
+                        checked = settings.salarySettings.enabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.updateSalarySettings(
+                                enabled = enabled,
+                                annualSalary = settings.salarySettings.annualSalary,
+                                frequency = settings.salarySettings.payFrequency
                             )
-                            Text(
-                                text = "Paid ${settings.payRates.payFrequency.name.lowercase()}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        } else {
-                            Text(
-                                text = "Hourly Rate: $${settings.payRates.basePay}/hr",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            if (settings.payRates.weekendRate > 0) {
-                                Text("Weekend Rate: $${settings.payRates.weekendRate}/hr")
-                            }
-                            if (settings.payRates.nightDifferential > 0) {
-                                Text("Night Differential: +$${settings.payRates.nightDifferential}/hr")
-                            }
                         }
-                    }
+                    )
+                }
+
+                if (settings.salarySettings.enabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Annual Salary: $${NumberFormat.getNumberInstance(Locale.US).format(settings.salarySettings.annualSalary)}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Paid ${settings.salarySettings.payFrequency.name.lowercase().replace('_', ' ')}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
 
+        // Hourly Settings Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .clickable { showHourlySettingsDialog = true }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Hourly",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Switch(
+                        checked = settings.hourlySettings.enabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.updateHourlySettings(
+                                enabled = enabled,
+                                baseRate = settings.hourlySettings.baseRate,
+                                weekendRate = settings.hourlySettings.weekendRate,
+                                nightDifferential = settings.hourlySettings.nightDifferential,
+                                overtimeMultiplier = settings.hourlySettings.overtimeMultiplier,
+                                nightShiftStart = settings.hourlySettings.nightShiftStart,
+                                nightShiftEnd = settings.hourlySettings.nightShiftEnd,
+                                frequency = settings.hourlySettings.payFrequency
+                            )
+                        }
+                    )
+                }
+
+                if (settings.hourlySettings.enabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Base Rate: $${settings.hourlySettings.baseRate}/hr",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (settings.hourlySettings.weekendRate > 0) {
+                        Text(
+                            text = "Weekend Rate: $${settings.hourlySettings.weekendRate}/hr",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (settings.hourlySettings.nightDifferential > 0) {
+                        Text(
+                            text = "Night Differential: +$${settings.hourlySettings.nightDifferential}/hr",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Night Hours: ${settings.hourlySettings.nightShiftStart}:00 - ${settings.hourlySettings.nightShiftEnd}:00",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Text(
+                        text = "Paid ${settings.hourlySettings.payFrequency.name.lowercase().replace('_', ' ')}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
+        // Tax Settings Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -424,6 +576,7 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
             }
         }
 
+        // Deductions Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -452,6 +605,7 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
             }
         }
 
+        // Show error if any
         if (error != null) {
             Snackbar(
                 modifier = Modifier.padding(16.dp),
@@ -465,14 +619,34 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
             }
         }
 
-        if (showPayRateDialog) {
-            PayRateDialog(
-                currentRates = settings.payRates,
-                employmentType = settings.employmentType,
-                onDismiss = { showPayRateDialog = false },
-                onConfirm = {
-                    viewModel.updatePayRates(it)
-                    showPayRateDialog = false
+        // Dialogs
+        if (showSalarySettingsDialog) {
+            SalarySettingsDialog(
+                currentSettings = settings.salarySettings,
+                onDismiss = { showSalarySettingsDialog = false },
+                onConfirm = { enabled, salary, frequency ->
+                    viewModel.updateSalarySettings(enabled, salary, frequency)
+                    showSalarySettingsDialog = false
+                }
+            )
+        }
+
+        if (showHourlySettingsDialog) {
+            HourlySettingsDialog(
+                currentSettings = settings.hourlySettings,
+                onDismiss = { showHourlySettingsDialog = false },
+                onConfirm = { settings ->
+                    viewModel.updateHourlySettings(
+                        enabled = settings.enabled,
+                        baseRate = settings.baseRate,
+                        weekendRate = settings.weekendRate,
+                        nightDifferential = settings.nightDifferential,
+                        overtimeMultiplier = settings.overtimeMultiplier,
+                        nightShiftStart = settings.nightShiftStart,
+                        nightShiftEnd = settings.nightShiftEnd,
+                        frequency = settings.payFrequency
+                    )
+                    showHourlySettingsDialog = false
                 }
             )
         }
@@ -487,6 +661,7 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
                 }
             )
         }
+
         if (showDeductionDialog) {
             DeductionDialog(
                 onDismiss = { showDeductionDialog = false },
@@ -498,6 +673,7 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
         }
     }
 }
+
 
 @Composable
 private fun DeductionItem(
@@ -530,48 +706,78 @@ private fun DeductionItem(
 }
 
 @Composable
-private fun PaycheckCard(paycheck: PaycheckCalculation) {
+private fun PaycheckCard(
+    paycheck: PaycheckCalculation,
+    showHourlyDetails: Boolean
+) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Paycheck Details",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PaySummaryRow("Gross Pay", paycheck.grossPay)
+
+            if (showHourlyDetails && (paycheck.regularHours > 0 ||
+                        paycheck.overtimeHours > 0 ||
+                        paycheck.weekendHours > 0 ||
+                        paycheck.nightHours > 0)) {
+
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
-                    text = "Gross Pay",
-                    style = MaterialTheme.typography.titleMedium
+                    text = "Hours Breakdown",
+                    style = MaterialTheme.typography.titleSmall
                 )
-                Text(
-                    text = NumberFormat.getCurrencyInstance().format(paycheck.grossPay),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                if (paycheck.regularHours > 0) {
+                    HoursSummaryRow("Regular Hours", paycheck.regularHours)
+                }
+                if (paycheck.overtimeHours > 0) {
+                    HoursSummaryRow("Overtime Hours", paycheck.overtimeHours)
+                }
+                if (paycheck.weekendHours > 0) {
+                    HoursSummaryRow("Weekend Hours", paycheck.weekendHours)
+                }
+                if (paycheck.nightHours > 0) {
+                    HoursSummaryRow("Night Hours", paycheck.nightHours)
+                }
             }
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            if (paycheck.deductions.isNotEmpty()) {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = "Deductions",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Column {
-                HourRow("Regular Hours", paycheck.regularHours)
-                HourRow("Overtime Hours", paycheck.overtimeHours)
-                HourRow("Weekend Hours", paycheck.weekendHours)
-                HourRow("Night Hours", paycheck.nightHours)
-            }
-
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Column {
                 paycheck.deductions.forEach { (name, amount) ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(name)
                         Text(
-                            "-${NumberFormat.getCurrencyInstance().format(amount)}",
+                            text = name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "-${NumberFormat.getCurrencyInstance(Locale.US).format(amount)}",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -579,41 +785,9 @@ private fun PaycheckCard(paycheck: PaycheckCalculation) {
             }
 
             Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Net Pay",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = NumberFormat.getCurrencyInstance().format(paycheck.netPay),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            PaySummaryRow("Net Pay", paycheck.netPay)
         }
     }
-}
-
-@Composable
-fun HourRow(label: String, hours: Double) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label)
-        Text("${String.format("%.2f", hours)} hrs")
-    }
-}
-
-private fun calculateShiftHours(shift: WorkShift): Double {
-    val duration = java.time.Duration.between(shift.startTime, shift.endTime)
-    return (duration.toMinutes() - shift.breakDuration.toMinutes()) / 60.0
 }
 
 @Composable
@@ -666,7 +840,8 @@ fun UpdateWalletBalanceDialog(
 fun DayShiftsCard(
     date: LocalDate,
     shifts: List<WorkShift>,
-    onShiftClick: (WorkShift) -> Unit
+    onShiftClick: (WorkShift) -> Unit,
+    onDeleteClick: (WorkShift) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -681,30 +856,63 @@ fun DayShiftsCard(
                 fontWeight = FontWeight.Bold
             )
             shifts.forEach { shift ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onShiftClick(shift) }
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = String.format("%.1f hrs", calculateShiftHours(shift)), // Format to 1 decimal place
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${shift.startTime.format(DateTimeFormatter.ofPattern("h:mm a"))} - " +
-                                    shift.endTime.format(DateTimeFormatter.ofPattern("h:mm a")),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
+                ShiftItem(
+                    shift = shift,
+                    onClick = { onShiftClick(shift) },
+                    onDeleteClick = { onDeleteClick(shift) }
+                )
             }
         }
     }
 }
+
+@Composable
+private fun ShiftItem(
+    shift: WorkShift,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = String.format("%.1f hrs", calculateShiftHours(shift)),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "${shift.startTime.format(DateTimeFormatter.ofPattern("h:mm a"))} - " +
+                        shift.endTime.format(DateTimeFormatter.ofPattern("h:mm a")),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (shift.isNightShift) {
+                Text(
+                    text = "Night Shift",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        IconButton(
+            onClick = onDeleteClick,
+            colors = IconButtonDefaults.iconButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete shift"
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
