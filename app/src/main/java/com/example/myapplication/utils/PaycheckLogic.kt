@@ -4,82 +4,166 @@ import com.example.myapplication.data.*
 import java.time.Duration
 
 object PaycheckCalculator {
+    private const val MEDICARE_RATE = 0.0145  // 1.45%
+    private const val SOCIAL_SECURITY_RATE = 0.062  // 6.2%
+    private const val SOCIAL_SECURITY_WAGE_CAP = 147000.0  // 2024 wage base
+
     fun calculatePaycheck(
         shifts: List<WorkShift>,
         settings: PaySettings
     ): PaycheckCalculation {
-        val hourlySettings = settings.hourlySettings
-        val salarySettings = settings.salarySettings
-
         // Track hours and pay separately for each type
         var totalRegularHours = 0.0
         var totalOvertimeHours = 0.0
         var totalWeekendHours = 0.0
         var totalNightHours = 0.0
         var totalPay = 0.0
-        var isHourly = false
 
         // Calculate hourly pay if enabled
-        if (hourlySettings.enabled) {
-            isHourly = true // Mark as hourly
-            shifts.forEach { shift ->
-                val (regularHours, nightHours) = calculateShiftHours(
-                    shift,
-                    hourlySettings.nightShiftStart,
-                    hourlySettings.nightShiftEnd
+        if (settings.hourlySettings.enabled) {
+            val hourlyPay = calculateHourlyPay(
+                shifts = shifts,
+                hourlySettings = settings.hourlySettings,
+                hourlyHours = HourlyHours(
+                    regularHours = totalRegularHours,
+                    overtimeHours = totalOvertimeHours,
+                    weekendHours = totalWeekendHours,
+                    nightHours = totalNightHours
                 )
+            )
 
-                if (shift.isWeekend) {
-                    totalWeekendHours += (regularHours + nightHours)
-                    totalPay += totalWeekendHours * hourlySettings.weekendRate
-                } else {
-                    // Add regular hours up to 40
-                    val remainingRegularHours = 40.0 - totalRegularHours
-                    if (regularHours <= remainingRegularHours) {
-                        totalRegularHours += regularHours
-                        totalPay += regularHours * hourlySettings.baseRate
-                    } else {
-                        totalRegularHours += remainingRegularHours
-                        totalOvertimeHours += regularHours - remainingRegularHours
-                        totalPay += remainingRegularHours * hourlySettings.baseRate +
-                                (regularHours - remainingRegularHours) * hourlySettings.baseRate * hourlySettings.overtimeMultiplier
-                    }
+            totalPay += hourlyPay.pay
+            totalRegularHours = hourlyPay.hours.regularHours
+            totalOvertimeHours = hourlyPay.hours.overtimeHours
+            totalWeekendHours = hourlyPay.hours.weekendHours
+            totalNightHours = hourlyPay.hours.nightHours
 
-                    // Add night differential hours
-                    totalNightHours += nightHours
-                    totalPay += nightHours * (hourlySettings.baseRate + hourlySettings.nightDifferential)
-                }
-            }
+            // Calculate hourly deductions
+            val deductions = calculateDeductions(
+                grossPay = totalPay,
+                taxSettings = settings.hourlyTaxSettings,
+                deductions = settings.hourlyDeductions
+            )
+
+            return PaycheckCalculation(
+                grossPay = totalPay,
+                netPay = totalPay - deductions.values.sum(),
+                regularHours = totalRegularHours,
+                overtimeHours = totalOvertimeHours,
+                weekendHours = totalWeekendHours,
+                nightHours = totalNightHours,
+                deductions = deductions
+            )
         }
 
-        // Add salary pay if enabled
-        if (salarySettings.enabled) {
-            isHourly = false // Mark as salary
-            val annualSalary = salarySettings.annualSalary
-            val salaryPerPeriod = when (salarySettings.payFrequency) {
-                PayFrequency.WEEKLY -> annualSalary / 52
-                PayFrequency.BI_WEEKLY -> annualSalary / 26
-                PayFrequency.SEMI_MONTHLY -> annualSalary / 24
-                PayFrequency.MONTHLY -> annualSalary / 12
-            }
-            totalPay += salaryPerPeriod
+        // Calculate salary pay if enabled
+        if (settings.salarySettings.enabled) {
+            val salaryPay = calculateSalaryPay(settings.salarySettings)
+            totalPay = salaryPay
+
+            // Calculate salary deductions
+            val deductions = calculateDeductions(
+                grossPay = totalPay,
+                taxSettings = settings.salaryTaxSettings,
+                deductions = settings.salaryDeductions
+            )
+
+            return PaycheckCalculation(
+                grossPay = totalPay,
+                netPay = totalPay - deductions.values.sum(),
+                regularHours = 0.0, // Salary doesn't track hours
+                overtimeHours = 0.0,
+                weekendHours = 0.0,
+                nightHours = 0.0,
+                deductions = deductions
+            )
         }
 
-        // Calculate deductions
-        val deductions = calculateDeductions(totalPay, isHourly, settings)
-        val totalDeductions = deductions.values.sum()
-
+        // Return zero-value calculation if neither enabled
         return PaycheckCalculation(
-            grossPay = totalPay,
-            netPay = totalPay - totalDeductions,
-            regularHours = totalRegularHours,
-            overtimeHours = totalOvertimeHours,
-            weekendHours = totalWeekendHours,
-            nightHours = totalNightHours,
-            deductions = deductions
+            grossPay = 0.0,
+            netPay = 0.0,
+            regularHours = 0.0,
+            overtimeHours = 0.0,
+            weekendHours = 0.0,
+            nightHours = 0.0,
+            deductions = emptyMap()
         )
     }
 
+    private data class HourlyHours(
+        val regularHours: Double,
+        val overtimeHours: Double,
+        val weekendHours: Double,
+        val nightHours: Double
+    )
+
+    private data class HourlyPayResult(
+        val pay: Double,
+        val hours: HourlyHours
+    )
+
+    private fun calculateHourlyPay(
+        shifts: List<WorkShift>,
+        hourlySettings: HourlySettings,
+        hourlyHours: HourlyHours
+    ): HourlyPayResult {
+        var totalPay = 0.0
+        var regularHours = hourlyHours.regularHours
+        var overtimeHours = hourlyHours.overtimeHours
+        var weekendHours = hourlyHours.weekendHours
+        var nightHours = hourlyHours.nightHours
+
+        shifts.forEach { shift ->
+            val (regularShiftHours, nightShiftHours) = calculateShiftHours(
+                shift,
+                hourlySettings.nightShiftStart,
+                hourlySettings.nightShiftEnd
+            )
+
+            if (shift.isWeekend) {
+                weekendHours += (regularShiftHours + nightShiftHours)
+                totalPay += weekendHours * hourlySettings.weekendRate
+            } else {
+                // Add regular hours up to 40
+                val remainingRegularHours = 40.0 - regularHours
+                if (regularShiftHours <= remainingRegularHours) {
+                    regularHours += regularShiftHours
+                    totalPay += regularShiftHours * hourlySettings.baseRate
+                } else {
+                    regularHours += remainingRegularHours
+                    overtimeHours += regularShiftHours - remainingRegularHours
+                    totalPay += remainingRegularHours * hourlySettings.baseRate +
+                            (regularShiftHours - remainingRegularHours) *
+                            hourlySettings.baseRate *
+                            hourlySettings.overtimeMultiplier
+                }
+
+                // Add night differential hours
+                nightHours += nightShiftHours
+                totalPay += nightShiftHours * (hourlySettings.baseRate + hourlySettings.nightDifferential)
+            }
+        }
+
+        return HourlyPayResult(
+            pay = totalPay,
+            hours = HourlyHours(
+                regularHours = regularHours,
+                overtimeHours = overtimeHours,
+                weekendHours = weekendHours,
+                nightHours = nightHours
+            )
+        )
+    }
+
+    private fun calculateSalaryPay(settings: SalarySettings): Double {
+        return when (settings.payFrequency) {
+            PayFrequency.WEEKLY -> settings.annualSalary / 52
+            PayFrequency.BI_WEEKLY -> settings.annualSalary / 26
+            PayFrequency.SEMI_MONTHLY -> settings.annualSalary / 24
+            PayFrequency.MONTHLY -> settings.annualSalary / 12
+        }
+    }
 
     private data class ShiftHours(
         val regular: Double,
@@ -107,10 +191,7 @@ object PaycheckCalculator {
         val nightHours = nightMinutes / 60.0
         val regularHours = (totalMinutes / 60.0) - nightHours
 
-        return ShiftHours(
-            regular = regularHours,
-            night = nightHours
-        )
+        return ShiftHours(regular = regularHours, night = nightHours)
     }
 
     private fun isNightShiftHour(hour: Int, nightShiftStart: Int, nightShiftEnd: Int): Boolean {
@@ -125,45 +206,47 @@ object PaycheckCalculator {
 
     private fun calculateDeductions(
         grossPay: Double,
-        isHourly: Boolean,
-        settings: PaySettings
+        taxSettings: TaxSettings,
+        deductions: List<Deduction>
     ): Map<String, Double> {
-        val deductions = mutableMapOf<String, Double>()
+        val result = mutableMapOf<String, Double>()
 
-        // Determine the applicable tax settings and deductions based on employment type
-        val taxSettings = if (isHourly) settings.hourlyTaxSettings else settings.salaryTaxSettings
-        val applicableDeductions =
-            if (isHourly) settings.hourlyDeductions else settings.salaryDeductions
-
-        // Apply tax settings
-        with(taxSettings) {
-            if (federalWithholding) {
-                deductions["Federal Tax"] = grossPay * 0.22 // Example rate
-            }
-            if (stateTaxEnabled) {
-                deductions["State Tax"] = grossPay * (stateWithholdingPercentage / 100)
-            }
-            if (cityTaxEnabled) {
-                deductions["City Tax"] = grossPay * (cityWithholdingPercentage / 100)
-            }
-            if (medicareTaxEnabled) {
-                deductions["Medicare"] = grossPay * 0.0145
-            }
-            if (socialSecurityTaxEnabled) {
-                deductions["Social Security"] = (grossPay * 0.062).coerceAtMost(147000 * 0.062)
-            }
+        // Federal Tax
+        if (taxSettings.federalWithholding) {
+            result["Federal Tax"] = grossPay * (taxSettings.federalTaxRate / 100)
         }
 
-        // Apply custom deductions
-        applicableDeductions.forEach { deduction ->
+        // State Tax
+        if (taxSettings.stateTaxEnabled) {
+            result["State Tax"] = grossPay * (taxSettings.stateWithholdingPercentage / 100)
+        }
+
+        // City Tax
+        if (taxSettings.cityTaxEnabled) {
+            result["City Tax"] = grossPay * (taxSettings.cityWithholdingPercentage / 100)
+        }
+
+        // Medicare
+        if (taxSettings.medicareTaxEnabled) {
+            result["Medicare"] = grossPay * MEDICARE_RATE
+        }
+
+        // Social Security
+        if (taxSettings.socialSecurityTaxEnabled) {
+            val socialSecurityWages = grossPay.coerceAtMost(SOCIAL_SECURITY_WAGE_CAP)
+            result["Social Security"] = socialSecurityWages * SOCIAL_SECURITY_RATE
+        }
+
+        // Custom deductions
+        deductions.forEach { deduction ->
             val amount = when (deduction.frequency) {
                 DeductionFrequency.PER_PAYCHECK -> deduction.amount
-                DeductionFrequency.MONTHLY -> deduction.amount / 2 // Assuming bi-weekly
-                DeductionFrequency.ANNUAL -> deduction.amount / 24 // Assuming bi-weekly
+                DeductionFrequency.MONTHLY -> deduction.amount / 2  // Assuming semi-monthly pay
+                DeductionFrequency.ANNUAL -> deduction.amount / 24  // Assuming semi-monthly pay
             }
-            deductions[deduction.name] = amount
+            result[deduction.name] = amount
         }
 
-        return deductions
+        return result
     }
 }

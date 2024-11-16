@@ -1,8 +1,10 @@
 package com.example.myapplication.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.TextButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +31,9 @@ fun TaxSettingsDialog(
         title = { Text("Tax Settings") },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Type selector
@@ -48,7 +52,6 @@ fun TaxSettingsDialog(
                     }
                 }
 
-                // Settings for selected type
                 val currentSettings = if (selectedType == 0) salarySettings else hourlySettings
                 val updateSettings = { newSettings: TaxSettings ->
                     if (selectedType == 0) {
@@ -58,83 +61,138 @@ fun TaxSettingsDialog(
                     }
                 }
 
-                // Federal Tax
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                // Federal Tax Section with configurable rate
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Federal Withholding")
-                    Switch(
-                        checked = currentSettings.federalWithholding,
-                        onCheckedChange = {
-                            updateSettings(currentSettings.copy(federalWithholding = it))
-                        }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Federal Tax")
+                        Switch(
+                            checked = currentSettings.federalWithholding,
+                            onCheckedChange = { enabled ->
+                                updateSettings(currentSettings.copy(federalWithholding = enabled))
+                            }
+                        )
+                    }
+                    if (currentSettings.federalWithholding) {
+                        OutlinedTextField(
+                            value = currentSettings.federalTaxRate.toString(),
+                            onValueChange = { value ->
+                                val rate = value.toDoubleOrNull() ?: currentSettings.federalTaxRate
+                                updateSettings(currentSettings.copy(federalTaxRate = rate))
+                            },
+                            label = { Text("Federal Tax Rate") },
+                            suffix = { Text("%") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        )
+                    }
                 }
 
-                // State Tax
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                // State Tax Section
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("State Tax")
-                    Switch(
-                        checked = currentSettings.stateTaxEnabled,
-                        onCheckedChange = {
-                            updateSettings(currentSettings.copy(stateTaxEnabled = it))
-                        }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("State Tax")
+                        Switch(
+                            checked = currentSettings.stateTaxEnabled,
+                            onCheckedChange = { enabled ->
+                                updateSettings(currentSettings.copy(stateTaxEnabled = enabled))
+                            }
+                        )
+                    }
+                    if (currentSettings.stateTaxEnabled) {
+                        OutlinedTextField(
+                            value = currentSettings.stateWithholdingPercentage.toString(),
+                            onValueChange = { value ->
+                                val percentage = value.toDoubleOrNull() ?: currentSettings.stateWithholdingPercentage
+                                updateSettings(currentSettings.copy(stateWithholdingPercentage = percentage))
+                            },
+                            label = { Text("State Tax Rate") },
+                            suffix = { Text("%") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        )
+                    }
                 }
 
-                if (currentSettings.stateTaxEnabled) {
-                    OutlinedTextField(
-                        value = currentSettings.stateWithholdingPercentage.toString(),
-                        onValueChange = {
-                            updateSettings(currentSettings.copy(
-                                stateWithholdingPercentage = it.toDoubleOrNull() ?: 0.0
-                            ))
-                        },
-                        label = { Text("State Tax Percentage") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
+                // Fixed Rate Taxes
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
                     )
-                }
-
-                // City Tax
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("City Tax")
-                    Switch(
-                        checked = currentSettings.cityTaxEnabled,
-                        onCheckedChange = {
-                            updateSettings(currentSettings.copy(cityTaxEnabled = it))
-                        }
-                    )
-                }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Standard Deductions",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
 
-                if (currentSettings.cityTaxEnabled) {
-                    OutlinedTextField(
-                        value = currentSettings.cityWithholdingPercentage.toString(),
-                        onValueChange = {
-                            updateSettings(currentSettings.copy(
-                                cityWithholdingPercentage = it.toDoubleOrNull() ?: 0.0
-                            ))
-                        },
-                        label = { Text("City Tax Percentage") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        // Medicare
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Medicare (1.45%)")
+                            Switch(
+                                checked = currentSettings.medicareTaxEnabled,
+                                onCheckedChange = { enabled ->
+                                    updateSettings(currentSettings.copy(medicareTaxEnabled = enabled))
+                                }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Social Security
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Social Security (6.2%)")
+                                Switch(
+                                    checked = currentSettings.socialSecurityTaxEnabled,
+                                    onCheckedChange = { enabled ->
+                                        updateSettings(currentSettings.copy(socialSecurityTaxEnabled = enabled))
+                                    }
+                                )
+                            }
+                            Text(
+                                text = "Capped at $147,000 annually",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(salarySettings, hourlySettings)
-                }
-            ) {
+            Button(onClick = { onConfirm(salarySettings, hourlySettings) }) {
                 Text("Save")
             }
         },
