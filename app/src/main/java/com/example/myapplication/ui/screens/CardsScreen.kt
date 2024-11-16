@@ -199,173 +199,176 @@ fun CardsScreen(navController: NavHostController, viewModel: MainViewModel, onIm
             expenseFilters.years.size
 
     ScreenWithBottomBar(navController = navController) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize()) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 4.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+        Box(modifier = Modifier.fillMaxSize()) {  // Wrap everything in a Box
+            Column(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shadowElevation = 4.dp
                 ) {
-                    // Title Row: Center-align "Transactions" on a separate line
-                    Text(
-                        text = "Transactions",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.CenterHorizontally) // Center-align title
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp)) // Add some space between title and buttons
-
-                    // Button Row: Align buttons to the end of the row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
-                        Button(
-                            onClick = onImportClick,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text("Import CSV")
-                        }
-                        Button(onClick = { showDialog = true }) {
-                            Text("Clear CSV")
-                        }
-                    }
-                }
-            }
-
-
-            // Enhanced Filter Button
-            OutlinedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                onClick = { showFilters = !showFilters }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.FilterList,
-                            contentDescription = if (showFilters) "Hide Filters" else "Show Filters",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        // Title Row: Center-align "Transactions" on a separate line
                         Text(
-                            text = if (showFilters) "Hide Filters" else "Show Filters",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = "Transactions",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.align(Alignment.CenterHorizontally) // Center-align title
                         )
-                        if (activeFilterCount > 0) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary
+
+                        Spacer(modifier = Modifier.height(8.dp)) // Add some space between title and buttons
+
+                        // Button Row: Align buttons to the end of the row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = onImportClick,
+                                modifier = Modifier.padding(end = 8.dp)
                             ) {
-                                Text(
-                                    text = activeFilterCount.toString(),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
+                                Text("Import CSV")
+                            }
+                            Button(onClick = { showDialog = true }) {
+                                Text("Clear CSV")
                             }
                         }
                     }
-                    Icon(
-                        imageVector = if (showFilters) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-            }
-
-            // Enhanced Filter Section
-            AnimatedVisibility(
-                visible = showFilters,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                ExpenseFilterSection( // Changed from FilterSection to ExpenseFilterSection
-                    currentFilters = expenseFilters,
-                    budgetCategories = budgetCategories,
-                    selectedSource = viewModel.selectedSource.collectAsState().value,
-                    availableSources = viewModel.availableSources.collectAsState().value,
-                    onYearSelected = { year ->
-                        viewModel.updateYearFilters(
-                            if (expenseFilters.years.contains(year))
-                                expenseFilters.years - year
-                            else
-                                expenseFilters.years + year
-                        )
-                    },
-                    onMonthSelected = { month ->
-                        viewModel.updateMonthFilters(
-                            if (expenseFilters.months.contains(month))
-                                expenseFilters.months - month
-                            else
-                                expenseFilters.months + month
-                        )
-                    },
-                    onCategorySelected = { category ->
-                        viewModel.updateCategoryFilters(
-                            if (expenseFilters.categories.contains(category))
-                                expenseFilters.categories - category
-                            else
-                                expenseFilters.categories + category
-                        )
-                    },
-                    onSourceSelected = { source ->
-                        viewModel.setSelectedSource(source)
-                    }
-                )
-            }
 
 
-            // Expense List
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-                items(expenses) { expense ->
-                    ExpenseItem(
-                        expense = expense,
-                        budgetCategories = budgetCategories,
-                        onCategoryChange = { newCategory ->
-                            viewModel.updateExpenseCategory(expense.id, newCategory)
-                        },
-                        onDelete = { viewModel.deleteExpense(expense) }
-                    )
-                }
-            }
-
-            // FAB for adding transactions
-            Box(modifier = Modifier.fillMaxSize()) {
-                FloatingActionButton(
-                    onClick = { showAddDialog = true },
+                // Enhanced Filter Button
+                OutlinedCard(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    onClick = { showFilters = !showFilters }
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Cash Transaction")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FilterList,
+                                contentDescription = if (showFilters) "Hide Filters" else "Show Filters",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = if (showFilters) "Hide Filters" else "Show Filters",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (activeFilterCount > 0) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = activeFilterCount.toString(),
+                                        modifier = Modifier.padding(
+                                            horizontal = 8.dp,
+                                            vertical = 4.dp
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                        Icon(
+                            imageVector = if (showFilters) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+
+                // Enhanced Filter Section
+                AnimatedVisibility(
+                    visible = showFilters,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    ExpenseFilterSection(
+                        currentFilters = expenseFilters,
+                        budgetCategories = budgetCategories,
+                        selectedSource = viewModel.selectedSource.collectAsState().value,
+                        availableSources = viewModel.availableSources.collectAsState().value,
+                        onYearSelected = { year ->
+                            viewModel.updateYearFilters(
+                                if (expenseFilters.years.contains(year))
+                                    expenseFilters.years - year
+                                else
+                                    expenseFilters.years + year
+                            )
+                        },
+                        onMonthSelected = { month ->
+                            viewModel.updateMonthFilters(
+                                if (expenseFilters.months.contains(month))
+                                    expenseFilters.months - month
+                                else
+                                    expenseFilters.months + month
+                            )
+                        },
+                        onCategorySelected = { category ->
+                            viewModel.updateCategoryFilters(
+                                if (expenseFilters.categories.contains(category))
+                                    expenseFilters.categories - category
+                                else
+                                    expenseFilters.categories + category
+                            )
+                        },
+                        onSourceSelected = { source ->
+                            viewModel.setSelectedSource(source)
+                        }
+                    )
+                }
+
+                // Expense List
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    items(expenses) { expense ->
+                        ExpenseItem(
+                            expense = expense,
+                            budgetCategories = budgetCategories,
+                            onCategoryChange = { newCategory ->
+                                viewModel.updateExpenseCategory(expense.id, newCategory)
+                            },
+                            onDelete = { viewModel.deleteExpense(expense) }
+                        )
+                    }
+                }
+            }
+
+            // FAB - Now positioned correctly in the Box
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Cash Transaction")
             }
         }
+
 
         // Dialogs
         if (showAddDialog) {
@@ -407,6 +410,7 @@ fun CardsScreen(navController: NavHostController, viewModel: MainViewModel, onIm
         }
     }
 }
+
 
 
 
