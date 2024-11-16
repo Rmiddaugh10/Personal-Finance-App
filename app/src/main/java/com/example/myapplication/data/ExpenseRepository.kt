@@ -30,6 +30,10 @@ class ExpenseRepository(
     private val walletDao: WalletDao,
     private val shiftDao: ShiftDao,
     private val payPeriodDao: PayPeriodDao,
+    private val salaryTaxSettingsDao: SalaryTaxSettingsDao,
+    private val hourlyTaxSettingsDao: HourlyTaxSettingsDao,
+    private val salaryDeductionsDao: SalaryDeductionsDao,
+    private val hourlyDeductionsDao: HourlyDeductionsDao,
     private val dataStore: DataStore<androidx.datastore.preferences.core.Preferences>,
     private val scope: CoroutineScope,
 ) {
@@ -51,14 +55,23 @@ class ExpenseRepository(
     suspend fun getPaySettings(): PaySettings {
         return try {
             val preferences = dataStore.data.first()
-            preferences[PreferencesKeys.PAY_SETTINGS]?.let { json ->
+            val baseSettings = preferences[PreferencesKeys.PAY_SETTINGS]?.let { json ->
                 gson.fromJson(json, PaySettings::class.java)
             } ?: PaySettings.DEFAULT
+
+            // Get tax settings and deductions from the database
+            baseSettings.copy(
+                salaryTaxSettings = getSalaryTaxSettings(),
+                hourlyTaxSettings = getHourlyTaxSettings(),
+                salaryDeductions = getSalaryDeductions().first(),
+                hourlyDeductions = getHourlyDeductions().first()
+            )
         } catch (e: Exception) {
             Log.e("ExpenseRepository", "Error loading pay settings", e)
             PaySettings.DEFAULT
         }
     }
+
 
 
     private var categoryPatterns: List<CategoryPattern>? = null
@@ -300,7 +313,105 @@ class ExpenseRepository(
         }
     }
 
-    // Add this new method
+    // Wallet finance stuff
+
+    // Tax Settings Methods
+    private suspend fun getSalaryTaxSettings(): TaxSettings {
+        return salaryTaxSettingsDao.getTaxSettings().first()?.toDomainModel() ?: TaxSettings()
+    }
+
+    private suspend fun getHourlyTaxSettings(): TaxSettings {
+        return hourlyTaxSettingsDao.getTaxSettings().first()?.toDomainModel() ?: TaxSettings()
+    }
+
+    suspend fun updateSalaryTaxSettings(settings: TaxSettings) {
+        salaryTaxSettingsDao.insertTaxSettings(
+            SalaryTaxSettingsEntity(
+                federalWithholding = settings.federalWithholding,
+                stateTaxEnabled = settings.stateTaxEnabled,
+                stateWithholdingPercentage = settings.stateWithholdingPercentage,
+                cityTaxEnabled = settings.cityTaxEnabled,
+                cityWithholdingPercentage = settings.cityWithholdingPercentage,
+                medicareTaxEnabled = settings.medicareTaxEnabled,
+                socialSecurityTaxEnabled = settings.socialSecurityTaxEnabled
+            )
+        )
+    }
+
+    suspend fun updateHourlyTaxSettings(settings: TaxSettings) {
+        hourlyTaxSettingsDao.insertTaxSettings(
+            HourlyTaxSettingsEntity(
+                federalWithholding = settings.federalWithholding,
+                stateTaxEnabled = settings.stateTaxEnabled,
+                stateWithholdingPercentage = settings.stateWithholdingPercentage,
+                cityTaxEnabled = settings.cityTaxEnabled,
+                cityWithholdingPercentage = settings.cityWithholdingPercentage,
+                medicareTaxEnabled = settings.medicareTaxEnabled,
+                socialSecurityTaxEnabled = settings.socialSecurityTaxEnabled
+            )
+        )
+    }
+
+    // Deductions Methods
+    fun getSalaryDeductions(): Flow<List<Deduction>> =
+        salaryDeductionsDao.getAllDeductions()
+            .map { entities -> entities.map { it.toDomainModel() } }
+
+    fun getHourlyDeductions(): Flow<List<Deduction>> =
+        hourlyDeductionsDao.getAllDeductions()
+            .map { entities -> entities.map { it.toDomainModel() } }
+
+    suspend fun addSalaryDeduction(deduction: Deduction) {
+        salaryDeductionsDao.insertDeduction(
+            SalaryDeductionEntity(
+                name = deduction.name,
+                amount = deduction.amount,
+                frequency = deduction.frequency.name,
+                type = deduction.type.name,
+                taxable = deduction.taxable
+            )
+        )
+    }
+
+    suspend fun addHourlyDeduction(deduction: Deduction) {
+        hourlyDeductionsDao.insertDeduction(
+            HourlyDeductionEntity(
+                name = deduction.name,
+                amount = deduction.amount,
+                frequency = deduction.frequency.name,
+                type = deduction.type.name,
+                taxable = deduction.taxable
+            )
+        )
+    }
+
+    suspend fun removeSalaryDeduction(deduction: Deduction) {
+        salaryDeductionsDao.deleteDeduction(
+            SalaryDeductionEntity(
+                name = deduction.name,
+                amount = deduction.amount,
+                frequency = deduction.frequency.name,
+                type = deduction.type.name,
+                taxable = deduction.taxable
+            )
+        )
+    }
+
+    suspend fun removeHourlyDeduction(deduction: Deduction) {
+        hourlyDeductionsDao.deleteDeduction(
+            HourlyDeductionEntity(
+                name = deduction.name,
+                amount = deduction.amount,
+                frequency = deduction.frequency.name,
+                type = deduction.type.name,
+                taxable = deduction.taxable
+            )
+        )
+    }
+
+
+
+
     suspend fun transactionExists(
         year: Int,
         month: Int,

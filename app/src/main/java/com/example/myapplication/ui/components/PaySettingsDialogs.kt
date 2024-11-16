@@ -2,7 +2,6 @@ package com.example.myapplication.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.TextButton
 import androidx.compose.material3.*
@@ -16,104 +15,116 @@ import com.example.myapplication.data.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaxSettingsDialog(
-    currentSettings: TaxSettings,
+    currentSalarySettings: TaxSettings,
+    currentHourlySettings: TaxSettings,
     onDismiss: () -> Unit,
-    onConfirm: (TaxSettings) -> Unit
+    onConfirm: (salary: TaxSettings, hourly: TaxSettings) -> Unit
 ) {
-    var federalWithholding by remember { mutableStateOf(currentSettings.federalWithholding) }
-    var stateTaxEnabled by remember { mutableStateOf(currentSettings.stateTaxEnabled) }
-    var statePercentage by remember { mutableStateOf(currentSettings.stateWithholdingPercentage.toString()) }
-    var cityTaxEnabled by remember { mutableStateOf(currentSettings.cityTaxEnabled) }
-    var cityPercentage by remember { mutableStateOf(currentSettings.cityWithholdingPercentage.toString()) }
-    var medicareTaxEnabled by remember { mutableStateOf(currentSettings.medicareTaxEnabled) }
-    var socialSecurityTaxEnabled by remember { mutableStateOf(currentSettings.socialSecurityTaxEnabled) }
+    var selectedType by remember { mutableStateOf(0) } // 0 for salary, 1 for hourly
+    var salarySettings by remember { mutableStateOf(currentSalarySettings) }
+    var hourlySettings by remember { mutableStateOf(currentHourlySettings) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Tax Settings") },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Federal Tax Settings
+                // Type selector
+                TabRow(selectedTabIndex = selectedType) {
+                    Tab(
+                        selected = selectedType == 0,
+                        onClick = { selectedType = 0 }
+                    ) {
+                        Text("Salary")
+                    }
+                    Tab(
+                        selected = selectedType == 1,
+                        onClick = { selectedType = 1 }
+                    ) {
+                        Text("Hourly")
+                    }
+                }
+
+                // Settings for selected type
+                val currentSettings = if (selectedType == 0) salarySettings else hourlySettings
+                val updateSettings = { newSettings: TaxSettings ->
+                    if (selectedType == 0) {
+                        salarySettings = newSettings
+                    } else {
+                        hourlySettings = newSettings
+                    }
+                }
+
+                // Federal Tax
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Federal Withholding")
                     Switch(
-                        checked = federalWithholding,
-                        onCheckedChange = { federalWithholding = it }
+                        checked = currentSettings.federalWithholding,
+                        onCheckedChange = {
+                            updateSettings(currentSettings.copy(federalWithholding = it))
+                        }
                     )
                 }
 
-                // State Tax Settings
+                // State Tax
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("State Tax")
                     Switch(
-                        checked = stateTaxEnabled,
-                        onCheckedChange = { stateTaxEnabled = it }
+                        checked = currentSettings.stateTaxEnabled,
+                        onCheckedChange = {
+                            updateSettings(currentSettings.copy(stateTaxEnabled = it))
+                        }
                     )
                 }
 
-                if (stateTaxEnabled) {
+                if (currentSettings.stateTaxEnabled) {
                     OutlinedTextField(
-                        value = statePercentage,
-                        onValueChange = { statePercentage = it },
+                        value = currentSettings.stateWithholdingPercentage.toString(),
+                        onValueChange = {
+                            updateSettings(currentSettings.copy(
+                                stateWithholdingPercentage = it.toDoubleOrNull() ?: 0.0
+                            ))
+                        },
                         label = { Text("State Tax Percentage") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                // City Tax Settings
+                // City Tax
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("City Tax")
                     Switch(
-                        checked = cityTaxEnabled,
-                        onCheckedChange = { cityTaxEnabled = it }
+                        checked = currentSettings.cityTaxEnabled,
+                        onCheckedChange = {
+                            updateSettings(currentSettings.copy(cityTaxEnabled = it))
+                        }
                     )
                 }
 
-                if (cityTaxEnabled) {
+                if (currentSettings.cityTaxEnabled) {
                     OutlinedTextField(
-                        value = cityPercentage,
-                        onValueChange = { cityPercentage = it },
+                        value = currentSettings.cityWithholdingPercentage.toString(),
+                        onValueChange = {
+                            updateSettings(currentSettings.copy(
+                                cityWithholdingPercentage = it.toDoubleOrNull() ?: 0.0
+                            ))
+                        },
                         label = { Text("City Tax Percentage") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Medicare and Social Security
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Medicare Tax")
-                    Switch(
-                        checked = medicareTaxEnabled,
-                        onCheckedChange = { medicareTaxEnabled = it }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Social Security Tax")
-                    Switch(
-                        checked = socialSecurityTaxEnabled,
-                        onCheckedChange = { socialSecurityTaxEnabled = it }
                     )
                 }
             }
@@ -121,17 +132,7 @@ fun TaxSettingsDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm(
-                        TaxSettings(
-                            federalWithholding = federalWithholding,
-                            stateTaxEnabled = stateTaxEnabled,
-                            stateWithholdingPercentage = statePercentage.toDoubleOrNull() ?: 0.0,
-                            cityTaxEnabled = cityTaxEnabled,
-                            cityWithholdingPercentage = cityPercentage.toDoubleOrNull() ?: 0.0,
-                            medicareTaxEnabled = medicareTaxEnabled,
-                            socialSecurityTaxEnabled = socialSecurityTaxEnabled
-                        )
-                    )
+                    onConfirm(salarySettings, hourlySettings)
                 }
             ) {
                 Text("Save")
@@ -148,74 +149,115 @@ fun TaxSettingsDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeductionDialog(
-    currentDeduction: Deduction? = null,
     onDismiss: () -> Unit,
-    onConfirm: (Deduction) -> Unit
+    onConfirm: (deduction: Deduction, isForSalary: Boolean) -> Unit
 ) {
-    var name by remember { mutableStateOf(currentDeduction?.name ?: "") }
-    var amount by remember { mutableStateOf(currentDeduction?.amount?.toString() ?: "") }
-    var frequency by remember { mutableStateOf(currentDeduction?.frequency ?: DeductionFrequency.PER_PAYCHECK) }
-    var type by remember { mutableStateOf(currentDeduction?.type ?: DeductionType.OTHER) }
-    var taxable by remember { mutableStateOf(currentDeduction?.taxable == true) }
+    var name by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var frequency by remember { mutableStateOf(DeductionFrequency.PER_PAYCHECK) }
+    var type by remember { mutableStateOf(DeductionType.OTHER) }
+    var taxable by remember { mutableStateOf(false) }
+    var isForSalary by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (currentDeduction == null) "Add Deduction" else "Edit Deduction") },
+        title = { Text("Add Deduction") },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Employment Type Selection
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    FilterChip(
+                        selected = isForSalary,
+                        onClick = { isForSalary = true },
+                        label = { Text("Salary") }
+                    )
+                    FilterChip(
+                        selected = !isForSalary,
+                        onClick = { isForSalary = false },
+                        label = { Text("Hourly") }
+                    )
+                }
+
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        name = it
+                        error = null
+                    },
                     label = { Text("Deduction Name") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = amount,
-                    onValueChange = { amount = it },
+                    onValueChange = {
+                        amount = it
+                        error = null
+                    },
                     label = { Text("Amount") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 // Frequency Selection
                 Text("Frequency", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DeductionFrequency.entries.forEach { freq ->
-                        FilterChip(
+                DeductionFrequency.entries.forEach { freq ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = frequency == freq,
+                                onClick = { frequency = freq }
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
                             selected = frequency == freq,
-                            onClick = { frequency = freq },
-                            label = { Text(freq.name.replace("_", " ")) }
+                            onClick = { frequency = freq }
+                        )
+                        Text(
+                            text = freq.name.lowercase().replace('_', ' '),
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
 
                 // Type Selection
                 Text("Type", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DeductionType.entries.forEach { deductionType ->
-                        FilterChip(
+                DeductionType.entries.forEach { deductionType ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = type == deductionType,
+                                onClick = { type = deductionType }
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
                             selected = type == deductionType,
-                            onClick = { type = deductionType },
-                            label = { Text(deductionType.name) }
+                            onClick = { type = deductionType }
+                        )
+                        Text(
+                            text = deductionType.name,
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Taxable")
                     Switch(
@@ -223,25 +265,42 @@ fun DeductionDialog(
                         onCheckedChange = { taxable = it }
                     )
                 }
+
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isNotBlank() && amount.toDoubleOrNull() != null) {
-                        onConfirm(
-                            Deduction(
-                                name = name,
-                                amount = amount.toDoubleOrNull() ?: 0.0,
-                                frequency = frequency,
-                                type = type,
-                                taxable = taxable
-                            )
-                        )
+                    if (name.isBlank()) {
+                        error = "Please enter a deduction name"
+                        return@Button
                     }
+                    val deductionAmount = amount.toDoubleOrNull()
+                    if (deductionAmount == null || deductionAmount <= 0) {
+                        error = "Please enter a valid amount"
+                        return@Button
+                    }
+
+                    onConfirm(
+                        Deduction(
+                            name = name,
+                            amount = deductionAmount,
+                            frequency = frequency,
+                            type = type,
+                            taxable = taxable
+                        ),
+                        isForSalary
+                    )
                 }
             ) {
-                Text("Save")
+                Text("Add")
             }
         },
         dismissButton = {
@@ -251,6 +310,7 @@ fun DeductionDialog(
         }
     )
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalarySettingsDialog(

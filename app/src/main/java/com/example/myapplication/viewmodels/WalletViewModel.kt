@@ -33,6 +33,19 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
     private val _paySettings = MutableStateFlow(PaySettings())
     val paySettings: StateFlow<PaySettings> = _paySettings.asStateFlow()
 
+    private val _salaryTaxSettings = MutableStateFlow<TaxSettings>(TaxSettings())
+    val salaryTaxSettings: StateFlow<TaxSettings> = _salaryTaxSettings.asStateFlow()
+
+    private val _hourlyTaxSettings = MutableStateFlow<TaxSettings>(TaxSettings())
+    val hourlyTaxSettings: StateFlow<TaxSettings> = _hourlyTaxSettings.asStateFlow()
+
+    // Add new state flows for deductions
+    private val _salaryDeductions = MutableStateFlow<List<Deduction>>(emptyList())
+    val salaryDeductions: StateFlow<List<Deduction>> = _salaryDeductions.asStateFlow()
+
+    private val _hourlyDeductions = MutableStateFlow<List<Deduction>>(emptyList())
+    val hourlyDeductions: StateFlow<List<Deduction>> = _hourlyDeductions.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -83,6 +96,20 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
         // Calculate initial paychecks
         _paychecks.value = repository.calculatePaychecks()
+
+        // Load tax settings and deductions
+        viewModelScope.launch {
+            try {
+                repository.getSalaryDeductions().collect { deductions ->
+                    _salaryDeductions.value = deductions
+                }
+                repository.getHourlyDeductions().collect { deductions ->
+                    _hourlyDeductions.value = deductions
+                }
+            } catch (e: Exception) {
+                _error.value = "Error loading deductions: ${e.message}"
+            }
+        }
     }
 
     fun showUpdateBalanceDialog() {
@@ -177,7 +204,7 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
             try {
                 val currentSettings = _paySettings.value
                 val updatedSettings = currentSettings.copy(
-                    salarySettings = SalarySettings(
+                    salarySettings = currentSettings.salarySettings.copy(
                         enabled = enabled,
                         annualSalary = annualSalary,
                         payFrequency = frequency
@@ -206,7 +233,7 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
             try {
                 val currentSettings = _paySettings.value
                 val updatedSettings = currentSettings.copy(
-                    hourlySettings = HourlySettings(
+                    hourlySettings = currentSettings.hourlySettings.copy(
                         enabled = enabled,
                         baseRate = baseRate,
                         weekendRate = weekendRate,
@@ -238,11 +265,11 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         }
     }
 
-    fun updateTaxSettings(taxSettings: TaxSettings) {
+    fun updateTaxSettings(salarySettings: TaxSettings, hourlySettings: TaxSettings) {
         viewModelScope.launch {
             try {
-                val updatedSettings = _paySettings.value.copy(taxSettings = taxSettings)
-                _paySettings.value = updatedSettings
+                repository.updateSalaryTaxSettings(salarySettings)
+                repository.updateHourlyTaxSettings(hourlySettings)
                 recalculatePaychecks()
             } catch (e: Exception) {
                 _error.value = "Failed to update tax settings: ${e.message}"
@@ -250,14 +277,14 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         }
     }
 
-    fun addDeduction(deduction: Deduction) {
+    fun addDeduction(deduction: Deduction, isForSalary: Boolean) {
         viewModelScope.launch {
             try {
-                val currentDeductions = _paySettings.value.deductions
-                val updatedSettings = _paySettings.value.copy(
-                    deductions = currentDeductions + deduction
-                )
-                _paySettings.value = updatedSettings
+                if (isForSalary) {
+                    repository.addSalaryDeduction(deduction)
+                } else {
+                    repository.addHourlyDeduction(deduction)
+                }
                 recalculatePaychecks()
             } catch (e: Exception) {
                 _error.value = "Failed to add deduction: ${e.message}"
@@ -265,14 +292,14 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         }
     }
 
-    fun removeDeduction(deduction: Deduction) {
+    fun removeDeduction(deduction: Deduction, isForSalary: Boolean) {
         viewModelScope.launch {
             try {
-                val currentDeductions = _paySettings.value.deductions
-                val updatedSettings = _paySettings.value.copy(
-                    deductions = currentDeductions - deduction
-                )
-                _paySettings.value = updatedSettings
+                if (isForSalary) {
+                    repository.removeSalaryDeduction(deduction)
+                } else {
+                    repository.removeHourlyDeduction(deduction)
+                }
                 recalculatePaychecks()
             } catch (e: Exception) {
                 _error.value = "Failed to remove deduction: ${e.message}"
@@ -289,6 +316,7 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
             }
         }
     }
+
 
     private fun calculateUpcomingPayments(): List<PaymentInfo> {
         // This will be implemented based on your payment calculation logic

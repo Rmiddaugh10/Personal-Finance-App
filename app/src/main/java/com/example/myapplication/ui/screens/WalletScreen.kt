@@ -568,15 +568,43 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
                     text = "Tax Settings",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Column {
-                    Text("Federal Withholding: ${if (settings.taxSettings.federalWithholding) "Enabled" else "Disabled"}")
-                    Text("State Tax: ${if (settings.taxSettings.stateTaxEnabled) "${settings.taxSettings.stateWithholdingPercentage}%" else "Disabled"}")
-                    Text("City Tax: ${if (settings.taxSettings.cityTaxEnabled) "${settings.taxSettings.cityWithholdingPercentage}%" else "Disabled"}")
+                var selectedType by remember { mutableStateOf(0) } // 0 for salary, 1 for hourly
+
+                TabRow(
+                    selectedTabIndex = selectedType,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Tab(
+                        selected = selectedType == 0,
+                        onClick = { selectedType = 0 }
+                    ) {
+                        Text("Salary")
+                    }
+                    Tab(
+                        selected = selectedType == 1,
+                        onClick = { selectedType = 1 }
+                    ) {
+                        Text("Hourly")
+                    }
+                }
+
+                // Show tax settings based on selected type
+                if (selectedType == 0) {
+                    Column {
+                        Text("Federal Withholding: ${if (settings.salaryTaxSettings.federalWithholding) "Enabled" else "Disabled"}")
+                        Text("State Tax: ${if (settings.salaryTaxSettings.stateTaxEnabled) "${settings.salaryTaxSettings.stateWithholdingPercentage}%" else "Disabled"}")
+                        Text("City Tax: ${if (settings.salaryTaxSettings.cityTaxEnabled) "${settings.salaryTaxSettings.cityWithholdingPercentage}%" else "Disabled"}")
+                    }
+                } else {
+                    Column {
+                        Text("Federal Withholding: ${if (settings.hourlyTaxSettings.federalWithholding) "Enabled" else "Disabled"}")
+                        Text("State Tax: ${if (settings.hourlyTaxSettings.stateTaxEnabled) "${settings.hourlyTaxSettings.stateWithholdingPercentage}%" else "Disabled"}")
+                        Text("City Tax: ${if (settings.hourlyTaxSettings.cityTaxEnabled) "${settings.hourlyTaxSettings.cityWithholdingPercentage}%" else "Disabled"}")
+                    }
                 }
             }
         }
 
-        // Deductions Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -596,11 +624,60 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
                         Icon(Icons.Default.Add, "Add Deduction")
                     }
                 }
-                settings.deductions.forEach { deduction ->
-                    DeductionItem(
-                        deduction = deduction,
-                        onRemove = { viewModel.removeDeduction(it) }
-                    )
+
+                var selectedType by remember { mutableStateOf(0) } // 0 for salary, 1 for hourly
+
+                TabRow(
+                    selectedTabIndex = selectedType,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Tab(
+                        selected = selectedType == 0,
+                        onClick = { selectedType = 0 }
+                    ) {
+                        Text("Salary")
+                    }
+                    Tab(
+                        selected = selectedType == 1,
+                        onClick = { selectedType = 1 }
+                    ) {
+                        Text("Hourly")
+                    }
+                }
+
+                // Show deductions based on selected type
+                if (selectedType == 0) {
+                    if (settings.salaryDeductions.isEmpty()) {
+                        Text(
+                            "No salary deductions added",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        settings.salaryDeductions.forEach { deduction ->
+                            DeductionItem(
+                                deduction = deduction,
+                                onRemove = { viewModel.removeDeduction(it, true) }
+                            )
+                        }
+                    }
+                } else {
+                    if (settings.hourlyDeductions.isEmpty()) {
+                        Text(
+                            "No hourly deductions added",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        settings.hourlyDeductions.forEach { deduction ->
+                            DeductionItem(
+                                deduction = deduction,
+                                onRemove = { viewModel.removeDeduction(it, false) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -651,22 +728,25 @@ private fun PaySettingsSection(viewModel: WalletViewModel) {
             )
         }
 
+        // Update the tax dialog section
         if (showTaxDialog) {
             TaxSettingsDialog(
-                currentSettings = settings.taxSettings,
+                currentSalarySettings = settings.salaryTaxSettings,
+                currentHourlySettings = settings.hourlyTaxSettings,
                 onDismiss = { showTaxDialog = false },
-                onConfirm = {
-                    viewModel.updateTaxSettings(it)
+                onConfirm = { salarySettings, hourlySettings ->
+                    viewModel.updateTaxSettings(salarySettings, hourlySettings)
                     showTaxDialog = false
                 }
             )
         }
 
+// Update the deduction dialog section
         if (showDeductionDialog) {
             DeductionDialog(
                 onDismiss = { showDeductionDialog = false },
-                onConfirm = {
-                    viewModel.addDeduction(it)
+                onConfirm = { deduction, isForSalary ->
+                    viewModel.addDeduction(deduction, isForSalary)
                     showDeductionDialog = false
                 }
             )

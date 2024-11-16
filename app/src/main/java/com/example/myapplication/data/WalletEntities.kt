@@ -21,6 +21,54 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
+@Entity(tableName = "salary_tax_settings")
+data class SalaryTaxSettingsEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val federalWithholding: Boolean = false,
+    val stateTaxEnabled: Boolean = false,
+    val stateWithholdingPercentage: Double = 0.0,
+    val cityTaxEnabled: Boolean = false,
+    val cityWithholdingPercentage: Double = 0.0,
+    val medicareTaxEnabled: Boolean = false,
+    val socialSecurityTaxEnabled: Boolean = false
+)
+
+@Entity(tableName = "hourly_tax_settings")
+data class HourlyTaxSettingsEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val federalWithholding: Boolean = false,
+    val stateTaxEnabled: Boolean = false,
+    val stateWithholdingPercentage: Double = 0.0,
+    val cityTaxEnabled: Boolean = false,
+    val cityWithholdingPercentage: Double = 0.0,
+    val medicareTaxEnabled: Boolean = false,
+    val socialSecurityTaxEnabled: Boolean = false
+)
+
+@Entity(tableName = "salary_deductions")
+data class SalaryDeductionEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val name: String,
+    val amount: Double,
+    val frequency: String,
+    val type: String,
+    val taxable: Boolean = false
+)
+
+@Entity(tableName = "hourly_deductions")
+data class HourlyDeductionEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val name: String,
+    val amount: Double,
+    val frequency: String,
+    val type: String,
+    val taxable: Boolean = false
+)
+
 @Entity(tableName = "wallet_balance")
 data class WalletBalanceEntity(
     @PrimaryKey(autoGenerate = true)
@@ -158,6 +206,85 @@ data class PaymentCalculationWithDeductions(
         entityColumn = "paymentCalculationId"
     )
     val deductions: List<PaymentDeductionEntity>
+)
+
+@Dao
+interface SalaryTaxSettingsDao {
+    @Query("SELECT * FROM salary_tax_settings ORDER BY id DESC LIMIT 1")
+    fun getTaxSettings(): Flow<SalaryTaxSettingsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTaxSettings(settings: SalaryTaxSettingsEntity)
+}
+
+@Dao
+interface HourlyTaxSettingsDao {
+    @Query("SELECT * FROM hourly_tax_settings ORDER BY id DESC LIMIT 1")
+    fun getTaxSettings(): Flow<HourlyTaxSettingsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTaxSettings(settings: HourlyTaxSettingsEntity)
+}
+
+@Dao
+interface SalaryDeductionsDao {
+    @Query("SELECT * FROM salary_deductions")
+    fun getAllDeductions(): Flow<List<SalaryDeductionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeduction(deduction: SalaryDeductionEntity)
+
+    @Delete
+    suspend fun deleteDeduction(deduction: SalaryDeductionEntity)
+}
+
+@Dao
+interface HourlyDeductionsDao {
+    @Query("SELECT * FROM hourly_deductions")
+    fun getAllDeductions(): Flow<List<HourlyDeductionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeduction(deduction: HourlyDeductionEntity)
+
+    @Delete
+    suspend fun deleteDeduction(deduction: HourlyDeductionEntity)
+}
+
+// Extension functions for conversion between domain and entity models
+fun SalaryTaxSettingsEntity.toDomainModel() = TaxSettings(
+    federalWithholding = federalWithholding,
+    stateTaxEnabled = stateTaxEnabled,
+    stateWithholdingPercentage = stateWithholdingPercentage,
+    cityTaxEnabled = cityTaxEnabled,
+    cityWithholdingPercentage = cityWithholdingPercentage,
+    medicareTaxEnabled = medicareTaxEnabled,
+    socialSecurityTaxEnabled = socialSecurityTaxEnabled
+)
+
+fun HourlyTaxSettingsEntity.toDomainModel() = TaxSettings(
+    federalWithholding = federalWithholding,
+    stateTaxEnabled = stateTaxEnabled,
+    stateWithholdingPercentage = stateWithholdingPercentage,
+    cityTaxEnabled = cityTaxEnabled,
+    cityWithholdingPercentage = cityWithholdingPercentage,
+    medicareTaxEnabled = medicareTaxEnabled,
+    socialSecurityTaxEnabled = socialSecurityTaxEnabled
+)
+
+fun SalaryDeductionEntity.toDomainModel() = Deduction(
+    name = name,
+    amount = amount,
+    frequency = DeductionFrequency.valueOf(frequency),
+    type = DeductionType.valueOf(type),
+    taxable = taxable
+)
+
+fun HourlyDeductionEntity.toDomainModel() = Deduction(
+    name = name,
+    amount = amount,
+    frequency = DeductionFrequency.valueOf(frequency),
+    type = DeductionType.valueOf(type),
+    taxable = taxable
 )
 
 // WalletDao.kt

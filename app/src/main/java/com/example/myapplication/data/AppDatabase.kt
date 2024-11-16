@@ -40,9 +40,13 @@ class Converters {
         PayPeriodEntity::class,
         PayRateEntity::class,
         PaymentCalculationEntity::class,
-        PaymentDeductionEntity::class
+        PaymentDeductionEntity::class,
+        SalaryTaxSettingsEntity::class,    // Add these new entities
+        HourlyTaxSettingsEntity::class,
+        SalaryDeductionEntity::class,
+        HourlyDeductionEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(DateConverter::class, Converters::class, WalletTypeConverters::class)
@@ -56,6 +60,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shiftDao(): ShiftDao
     abstract fun payPeriodDao(): PayPeriodDao
     abstract fun paymentCalculationDao(): PaymentCalculationDao
+    abstract fun salaryTaxSettingsDao(): SalaryTaxSettingsDao
+    abstract fun hourlyTaxSettingsDao(): HourlyTaxSettingsDao
+    abstract fun salaryDeductionsDao(): SalaryDeductionsDao
+    abstract fun hourlyDeductionsDao(): HourlyDeductionsDao
 
     companion object {
         @Volatile
@@ -76,7 +84,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_8_9,
                         MIGRATION_9_10,
                         MIGRATION_10_11,
-                        MIGRATION_11_12
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
                     .fallbackToDestructiveMigration()
                     .build()
@@ -276,18 +285,67 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Add new columns to pay_periods table
+                // First, handle the existing tables from your current migration
                 database.execSQL("ALTER TABLE pay_periods ADD COLUMN salaryEnabled INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE pay_periods ADD COLUMN hourlyEnabled INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE pay_periods ADD COLUMN annualSalary REAL NOT NULL DEFAULT 0.0")
-
-                // Add new columns to pay_rates table
                 database.execSQL("ALTER TABLE pay_rates ADD COLUMN nightShiftStart INTEGER NOT NULL DEFAULT 18")
                 database.execSQL("ALTER TABLE pay_rates ADD COLUMN nightShiftEnd INTEGER NOT NULL DEFAULT 6")
 
-                // Drop the existing payment_calculations table
+                // Create tables for salary tax settings
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS salary_tax_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                federalWithholding INTEGER NOT NULL DEFAULT 0,
+                stateTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                stateWithholdingPercentage REAL NOT NULL DEFAULT 0.0,
+                cityTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                cityWithholdingPercentage REAL NOT NULL DEFAULT 0.0,
+                medicareTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                socialSecurityTaxEnabled INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+                // Create tables for hourly tax settings
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS hourly_tax_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                federalWithholding INTEGER NOT NULL DEFAULT 0,
+                stateTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                stateWithholdingPercentage REAL NOT NULL DEFAULT 0.0,
+                cityTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                cityWithholdingPercentage REAL NOT NULL DEFAULT 0.0,
+                medicareTaxEnabled INTEGER NOT NULL DEFAULT 0,
+                socialSecurityTaxEnabled INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+                // Create tables for salary deductions
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS salary_deductions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                type TEXT NOT NULL,
+                taxable INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+                // Create tables for hourly deductions
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS hourly_deductions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                type TEXT NOT NULL,
+                taxable INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+                // Recreate payment calculations table with the correct schema
                 database.execSQL("DROP TABLE IF EXISTS payment_calculations")
-                // Recreate the payment_calculations table with the correct schema
                 database.execSQL("""
             CREATE TABLE IF NOT EXISTS payment_calculations (
                 id INTEGER PRIMARY KEY NOT NULL,
@@ -302,15 +360,9 @@ abstract class AppDatabase : RoomDatabase() {
                 FOREIGN KEY (payPeriodId) REFERENCES pay_periods(id) ON DELETE CASCADE
             )
         """)
-                // Create the index with the correct name
-                database.execSQL("""
-            CREATE INDEX IF NOT EXISTS index_payment_calculations_payPeriodId 
-            ON payment_calculations(payPeriodId)
-        """)
 
-                // Drop the existing payment_deductions table
+                // Recreate payment deductions table with the correct schema
                 database.execSQL("DROP TABLE IF EXISTS payment_deductions")
-                // Recreate the payment_deductions table with the correct schema
                 database.execSQL("""
             CREATE TABLE IF NOT EXISTS payment_deductions (
                 id INTEGER PRIMARY KEY NOT NULL,
@@ -320,10 +372,74 @@ abstract class AppDatabase : RoomDatabase() {
                 FOREIGN KEY (paymentCalculationId) REFERENCES payment_calculations(id) ON DELETE CASCADE
             )
         """)
-                // Create the index with the correct name
+
+                // Create indices for better performance
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_payment_calculations_payPeriodId ON payment_calculations(payPeriodId)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_payment_deductions_calculation_id ON payment_deductions(paymentCalculationId)"
+                )
+            }
+        }
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Drop existing tables if necessary
+                database.execSQL("DROP TABLE IF EXISTS salary_tax_settings")
+                database.execSQL("DROP TABLE IF EXISTS hourly_tax_settings")
+                database.execSQL("DROP TABLE IF EXISTS salary_deductions")
+                database.execSQL("DROP TABLE IF EXISTS hourly_deductions")
+
+                // Recreate the salary_tax_settings table
                 database.execSQL("""
-            CREATE INDEX IF NOT EXISTS idx_payment_deductions_calculation_id 
-            ON payment_deductions(paymentCalculationId)
+            CREATE TABLE IF NOT EXISTS salary_tax_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                federalWithholding INTEGER NOT NULL,
+                stateTaxEnabled INTEGER NOT NULL,
+                stateWithholdingPercentage REAL NOT NULL,
+                cityTaxEnabled INTEGER NOT NULL,
+                cityWithholdingPercentage REAL NOT NULL,
+                medicareTaxEnabled INTEGER NOT NULL,
+                socialSecurityTaxEnabled INTEGER NOT NULL
+            )
+        """)
+
+                // Recreate the hourly_tax_settings table
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS hourly_tax_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                federalWithholding INTEGER NOT NULL,
+                stateTaxEnabled INTEGER NOT NULL,
+                stateWithholdingPercentage REAL NOT NULL,
+                cityTaxEnabled INTEGER NOT NULL,
+                cityWithholdingPercentage REAL NOT NULL,
+                medicareTaxEnabled INTEGER NOT NULL,
+                socialSecurityTaxEnabled INTEGER NOT NULL
+            )
+        """)
+
+                // Recreate the salary_deductions table
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS salary_deductions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                type TEXT NOT NULL,
+                taxable INTEGER NOT NULL
+            )
+        """)
+
+                // Recreate the hourly_deductions table
+                database.execSQL("""
+            CREATE TABLE IF NOT EXISTS hourly_deductions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                type TEXT NOT NULL,
+                taxable INTEGER NOT NULL
+            )
         """)
             }
         }

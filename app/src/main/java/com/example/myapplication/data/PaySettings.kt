@@ -3,8 +3,10 @@ package com.example.myapplication.data
 data class PaySettings(
     val salarySettings: SalarySettings = SalarySettings(),
     val hourlySettings: HourlySettings = HourlySettings(),
-    val taxSettings: TaxSettings = TaxSettings(),
-    val deductions: List<Deduction> = emptyList()
+    val salaryTaxSettings: TaxSettings = TaxSettings(),  // Add separate tax settings
+    val hourlyTaxSettings: TaxSettings = TaxSettings(),  // for each type
+    val salaryDeductions: List<Deduction> = emptyList(), // Add separate deductions
+    val hourlyDeductions: List<Deduction> = emptyList()  // for each type
 ) {
     companion object {
         val DEFAULT = PaySettings()
@@ -23,9 +25,8 @@ data class HourlySettings(
     val weekendRate: Double = 0.0,
     val nightDifferential: Double = 0.0,
     val overtimeMultiplier: Double = 1.5,
-    val holidayRate: Double = 0.0,
-    val nightShiftStart: Int = 18, // 6 PM
-    val nightShiftEnd: Int = 6,    // 6 AM
+    val nightShiftStart: Int = 18,
+    val nightShiftEnd: Int = 6,
     val payFrequency: PayFrequency = PayFrequency.BI_WEEKLY
 )
 

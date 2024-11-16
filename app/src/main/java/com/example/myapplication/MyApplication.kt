@@ -22,6 +22,10 @@ class MyApplication : Application() {
             shiftDao = database.shiftDao(),
             payPeriodDao = database.payPeriodDao(),
             paymentCalculationDao = database.paymentCalculationDao(),
+            salaryTaxSettingsDao = database.salaryTaxSettingsDao(),
+            hourlyTaxSettingsDao = database.hourlyTaxSettingsDao(),
+            salaryDeductionsDao = database.salaryDeductionsDao(),
+            hourlyDeductionsDao = database.hourlyDeductionsDao(),
             dataStore = dataStore,
             scope = applicationScope
         )

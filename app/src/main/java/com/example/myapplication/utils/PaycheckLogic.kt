@@ -17,9 +17,11 @@ object PaycheckCalculator {
         var totalWeekendHours = 0.0
         var totalNightHours = 0.0
         var totalPay = 0.0
+        var isHourly = false
 
         // Calculate hourly pay if enabled
         if (hourlySettings.enabled) {
+            isHourly = true // Mark as hourly
             shifts.forEach { shift ->
                 val (regularHours, nightHours) = calculateShiftHours(
                     shift,
@@ -52,6 +54,7 @@ object PaycheckCalculator {
 
         // Add salary pay if enabled
         if (salarySettings.enabled) {
+            isHourly = false // Mark as salary
             val annualSalary = salarySettings.annualSalary
             val salaryPerPeriod = when (salarySettings.payFrequency) {
                 PayFrequency.WEEKLY -> annualSalary / 52
@@ -63,7 +66,7 @@ object PaycheckCalculator {
         }
 
         // Calculate deductions
-        val deductions = calculateDeductions(totalPay, settings)
+        val deductions = calculateDeductions(totalPay, isHourly, settings)
         val totalDeductions = deductions.values.sum()
 
         return PaycheckCalculation(
@@ -76,6 +79,7 @@ object PaycheckCalculator {
             deductions = deductions
         )
     }
+
 
     private data class ShiftHours(
         val regular: Double,
@@ -119,11 +123,20 @@ object PaycheckCalculator {
         }
     }
 
-    private fun calculateDeductions(grossPay: Double, settings: PaySettings): Map<String, Double> {
+    private fun calculateDeductions(
+        grossPay: Double,
+        isHourly: Boolean,
+        settings: PaySettings
+    ): Map<String, Double> {
         val deductions = mutableMapOf<String, Double>()
 
+        // Determine the applicable tax settings and deductions based on employment type
+        val taxSettings = if (isHourly) settings.hourlyTaxSettings else settings.salaryTaxSettings
+        val applicableDeductions =
+            if (isHourly) settings.hourlyDeductions else settings.salaryDeductions
+
         // Apply tax settings
-        with(settings.taxSettings) {
+        with(taxSettings) {
             if (federalWithholding) {
                 deductions["Federal Tax"] = grossPay * 0.22 // Example rate
             }
@@ -142,11 +155,11 @@ object PaycheckCalculator {
         }
 
         // Apply custom deductions
-        settings.deductions.forEach { deduction ->
+        applicableDeductions.forEach { deduction ->
             val amount = when (deduction.frequency) {
                 DeductionFrequency.PER_PAYCHECK -> deduction.amount
-                DeductionFrequency.MONTHLY -> deduction.amount / 2 // Assuming semi-monthly
-                DeductionFrequency.ANNUAL -> deduction.amount / 24 // Assuming semi-monthly
+                DeductionFrequency.MONTHLY -> deduction.amount / 2 // Assuming bi-weekly
+                DeductionFrequency.ANNUAL -> deduction.amount / 24 // Assuming bi-weekly
             }
             deductions[deduction.name] = amount
         }
