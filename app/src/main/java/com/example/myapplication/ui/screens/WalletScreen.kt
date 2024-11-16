@@ -63,7 +63,10 @@ fun WalletScreen(
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .navigationBarsPadding()
+    ) {
         TabRow(
             selectedTabIndex = selectedTab,
             modifier = Modifier.fillMaxWidth(),
@@ -84,14 +87,21 @@ fun WalletScreen(
             }
         }
 
-        when (selectedTab) {
-            0 -> CashWalletSection(viewModel)
-            1 -> PaychecksSection(viewModel)
-            2 -> ScheduleSection(viewModel)
-            3 -> PaySettingsSection(viewModel)
+        Box(modifier = Modifier
+            .weight(1f)
+            .padding(bottom = 55.dp) // Adding padding to avoid being cut off by the navigation bar
+        ) {
+            when (selectedTab) {
+                0 -> CashWalletSection(viewModel)
+                1 -> PaychecksSection(viewModel)
+                2 -> ScheduleSection(viewModel)
+                3 -> PaySettingsSection(viewModel)
+            }
         }
     }
 }
+
+
 
 @Composable
 private fun CashWalletSection(viewModel: WalletViewModel) {
