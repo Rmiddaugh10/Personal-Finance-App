@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.*
+import com.example.myapplication.utils.PaycheckCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,8 +80,17 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         // Load pay settings
         _paySettings.value = repository.getPaySettings()
 
-        // Load upcoming pay periods
-        val generatedPayPeriods = repository.generatePayPeriodDates()
+        val frequency = when {
+            _paySettings.value.salarySettings.enabled -> _paySettings.value.salarySettings.payFrequency
+            _paySettings.value.hourlySettings.enabled -> _paySettings.value.hourlySettings.payFrequency
+            else -> PayFrequency.BI_WEEKLY // Default frequency
+        }
+
+        val generatedPayPeriods = repository.generatePayPeriodDates(
+            startDate = LocalDate.now(),
+            count = 3,
+            frequency = frequency
+        )
         _payPeriods.value = generatedPayPeriods
 
         // Load shifts
@@ -311,6 +321,7 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
         viewModelScope.launch {
             try {
                 _paychecks.value = repository.calculatePaychecks()
+                _payments.value = calculateUpcomingPayments()
             } catch (e: Exception) {
                 _error.value = "Error calculating paychecks: ${e.message}"
             }
@@ -319,10 +330,27 @@ class WalletViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
 
     private fun calculateUpcomingPayments(): List<PaymentInfo> {
-        // This will be implemented based on your payment calculation logic
-        return emptyList() // Placeholder
-    }
+        val settings = _paySettings.value
+        val payPeriods = _payPeriods.value
+        val shifts = _shifts.value
 
+        return payPeriods.map { period ->
+            // Get shifts for this period
+            val periodShifts = shifts.filter { shift ->
+                shift.date >= period.startDate && shift.date <= period.endDate
+            }
+
+            // Use existing PaycheckCalculator to calculate the paycheck
+            val paycheck = PaycheckCalculator.calculatePaycheck(periodShifts, settings)
+
+            PaymentInfo(
+                employeeName = "Current Employee",
+                amount = paycheck.grossPay,
+                date = period.payDate,
+                isEstimate = period.payDate > LocalDate.now()
+            )
+        }
+    }
 
     fun clearError() {
         _error.value = null

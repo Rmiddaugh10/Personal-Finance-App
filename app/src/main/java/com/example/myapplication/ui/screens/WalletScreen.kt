@@ -4,6 +4,7 @@ package com.example.myapplication.ui.screens
 //noinspection UsingMaterialAndMaterial3Libraries
 //noinspection UsingMaterialAndMaterial3Libraries
 //noinspection UsingMaterialAndMaterial3Libraries
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -171,7 +173,18 @@ private fun CashWalletSection(viewModel: WalletViewModel) {
 private fun PaychecksSection(viewModel: WalletViewModel) {
     val paychecks by viewModel.paychecks.collectAsState()
     val settings by viewModel.paySettings.collectAsState()
+    val shifts by viewModel.shifts.collectAsState() // Add this to verify shifts
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    // Add debug logging
+    LaunchedEffect(paychecks, settings, shifts) {
+        Log.d("PaychecksSection", """
+            Paychecks count: ${paychecks.size}
+            Settings: Salary enabled=${settings.salarySettings.enabled}, 
+                     Hourly enabled=${settings.hourlySettings.enabled}
+            Shifts count: ${shifts.size}
+        """.trimIndent())
+    }
 
     Column(
         modifier = Modifier
@@ -271,8 +284,20 @@ private fun PaychecksSection(viewModel: WalletViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val filteredPaychecks = when (selectedTabIndex) {
-                1 -> paychecks.filter { settings.salarySettings.enabled }
-                2 -> paychecks.filter { settings.hourlySettings.enabled }
+                1 -> paychecks.filter { paycheck ->
+                    // It's a salary paycheck if it has no hourly components
+                    paycheck.regularHours == 0.0 &&
+                            paycheck.overtimeHours == 0.0 &&
+                            paycheck.weekendHours == 0.0 &&
+                            paycheck.nightHours == 0.0
+                }
+                2 -> paychecks.filter { paycheck ->
+                    // It's an hourly paycheck if it has any hourly components
+                    paycheck.regularHours > 0.0 ||
+                            paycheck.overtimeHours > 0.0 ||
+                            paycheck.weekendHours > 0.0 ||
+                            paycheck.nightHours > 0.0
+                }
                 else -> paychecks
             }
 
@@ -1022,7 +1047,12 @@ fun AddEditShiftDialog(
         initialSelectedDateMillis = selectedDate
             .atStartOfDay()
             .toInstant(ZoneOffset.UTC)
-            .toEpochMilli()
+            .toEpochMilli(),
+        yearRange = IntRange(
+            LocalDate.now().year - 1,
+            LocalDate.now().year + 2
+        ),
+        initialDisplayMode = DisplayMode.Input
     )
 
     Dialog(
@@ -1051,19 +1081,61 @@ fun AddEditShiftDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
 
-                // Calendar section with increased width for full visibility
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 8.dp)  // Small padding to prevent edge touching
+                        .padding(horizontal = 16.dp)
                 ) {
-                    DatePicker(
-                        state = datePickerState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(400.dp),
-                        showModeToggle = false
-                    )
+                    Column {
+                        // Current month display
+                        Text(
+                            text = selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        // Days of week header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
+                                Text(
+                                    text = day,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        // Custom calendar display
+                        DatePicker(
+                            state = datePickerState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(320.dp), // Reduced height to fit first row
+                            title = null, // Remove default title
+                            headline = null, // Remove default headline
+                            showModeToggle = false,
+                            colors = DatePickerDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                                headlineContentColor = MaterialTheme.colorScheme.onSurface,
+                                weekdayContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                subheadContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                yearContentColor = MaterialTheme.colorScheme.onSurface,
+                                currentYearContentColor = MaterialTheme.colorScheme.primary,
+                                selectedYearContentColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedYearContainerColor = MaterialTheme.colorScheme.primary,
+                                dayContentColor = MaterialTheme.colorScheme.onSurface,
+                                selectedDayContentColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedDayContainerColor = MaterialTheme.colorScheme.primary,
+                                todayContentColor = MaterialTheme.colorScheme.primary,
+                                todayDateBorderColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
                 }
 
                 LaunchedEffect(datePickerState.selectedDateMillis) {

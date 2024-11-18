@@ -373,6 +373,9 @@ interface PayPeriodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayPeriod(payPeriod: PayPeriodEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPayPeriods(payPeriods: List<PayPeriodEntity>)
+
     @Query("SELECT * FROM pay_rates WHERE employeeId = :employeeId")
     suspend fun getPayRate(employeeId: String): PayRateEntity?
 
@@ -426,6 +429,7 @@ interface PayPeriodDao {
             ))
         }
     }
+
 
     private fun PayPeriodEntity.getDaysInPeriod(): Int =
         (endDate.toEpochDay() - startDate.toEpochDay()).toInt() + 1

@@ -485,6 +485,41 @@ class ExpenseRepository(
             }
     }
 
+    // In ExpenseRepository
+    suspend fun insertGeneratedPayPeriods(settings: PaySettings) {
+        // Determine which frequency to use based on enabled settings
+        val frequency = when {
+            settings.salarySettings.enabled -> settings.salarySettings.payFrequency
+            settings.hourlySettings.enabled -> settings.hourlySettings.payFrequency
+            else -> PayFrequency.BI_WEEKLY // Default frequency if neither enabled
+        }
+
+        val periods = generatePayPeriodDates(
+            startDate = LocalDate.now(),
+            count = 3,
+            frequency = frequency
+        )
+
+        val payPeriodEntities = periods.map { period ->
+            PayPeriodEntity(
+                employeeId = "current_user",
+                startDate = period.startDate,
+                endDate = period.endDate,
+                payDate = period.payDate,
+                isSalary = settings.salarySettings.enabled,
+                baseRate = if (settings.salarySettings.enabled) {
+                    settings.salarySettings.annualSalary / 52.0
+                } else {
+                    settings.hourlySettings.baseRate
+                },
+                salaryEnabled = settings.salarySettings.enabled,
+                hourlyEnabled = settings.hourlySettings.enabled,
+                annualSalary = settings.salarySettings.annualSalary
+            )
+        }
+        payPeriodDao.insertPayPeriods(payPeriodEntities)
+    }
+
     fun getShiftsForPayPeriod(
         employeeId: String,
         startDate: LocalDate,
@@ -588,23 +623,35 @@ class ExpenseRepository(
     // Paycheck Calculation
     suspend fun calculatePaychecks(): List<PaycheckCalculation> {
         val settings = getPaySettings()
+        Log.d("PaycheckCalc", "Settings loaded: salary=${settings.salarySettings.enabled}, hourly=${settings.hourlySettings.enabled}")
+
         val payPeriods = payPeriodDao.getUpcomingPayPeriods(LocalDate.now()).first()
+        Log.d("PaycheckCalc", "Found ${payPeriods.size} pay periods")
+
+        if (payPeriods.isEmpty()) {
+            Log.d("PaycheckCalc", "No pay periods found, generating new ones")
+            insertGeneratedPayPeriods(settings)
+            Log.d("PaycheckCalc", "Generated and inserted new pay periods")
+            return calculatePaychecks()
+        }
 
         return payPeriods.map { period ->
+            Log.d("PaycheckCalc", "Processing period ${period.startDate} to ${period.endDate}")
+
             val periodShifts = getShiftsForPayPeriod(
                 employeeId = "current_user",
                 startDate = period.startDate,
                 endDate = period.endDate
             ).first()
+            Log.d("PaycheckCalc", "Found ${periodShifts.size} shifts for period")
 
             val calculation = PaycheckCalculator.calculatePaycheck(
                 shifts = periodShifts,
                 settings = settings
             )
+            Log.d("PaycheckCalc", "Calculated paycheck: gross=${calculation.grossPay}, net=${calculation.netPay}")
 
-            // Save the calculation
             savePaymentCalculation(period.id, calculation)
-
             calculation
         }
     }
@@ -625,18 +672,66 @@ class ExpenseRepository(
 
     fun generatePayPeriodDates(
         startDate: LocalDate = LocalDate.now(),
-        count: Int = 3
+        count: Int = 3,
+        frequency: PayFrequency
     ): List<PayPeriod> {
+        return when (frequency) {
+            PayFrequency.WEEKLY -> generateWeeklyPeriods(startDate, count)
+            PayFrequency.BI_WEEKLY -> generateBiWeeklyPeriods(startDate, count)
+            PayFrequency.SEMI_MONTHLY -> generateSemiMonthlyPeriods(startDate, count)
+            PayFrequency.MONTHLY -> generateMonthlyPeriods(startDate, count)
+        }
+    }
+
+    private fun generateWeeklyPeriods(startDate: LocalDate, count: Int): List<PayPeriod> {
+        return (0 until count).map { i ->
+            val periodStart = startDate.plusWeeks(i.toLong())
+            val periodEnd = periodStart.plusDays(6)
+            val payDate = periodEnd.plusDays(5)
+
+            PayPeriod(startDate = periodStart, endDate = periodEnd, payDate = payDate)
+        }
+    }
+
+    private fun generateBiWeeklyPeriods(startDate: LocalDate, count: Int): List<PayPeriod> {
+        return (0 until count).map { i ->
+            val periodStart = startDate.plusWeeks((i * 2).toLong())
+            val periodEnd = periodStart.plusDays(13)
+            val payDate = periodEnd.plusDays(5)
+
+            PayPeriod(startDate = periodStart, endDate = periodEnd, payDate = payDate)
+        }
+    }
+
+    private fun generateSemiMonthlyPeriods(startDate: LocalDate, count: Int): List<PayPeriod> {
+        val periods = mutableListOf<PayPeriod>()
+        var currentDate = startDate
+
+        repeat(count) {
+            // First period: 1st-15th
+            val firstStart = currentDate.withDayOfMonth(1)
+            val firstEnd = currentDate.withDayOfMonth(15)
+            val firstPayDate = firstEnd.plusDays(5)
+            periods.add(PayPeriod(firstStart, firstEnd, firstPayDate))
+
+            // Second period: 16th-end of month
+            val secondStart = currentDate.withDayOfMonth(16)
+            val secondEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth())
+            val secondPayDate = secondEnd.plusDays(5)
+            periods.add(PayPeriod(secondStart, secondEnd, secondPayDate))
+
+            currentDate = currentDate.plusMonths(1)
+        }
+        return periods
+    }
+
+    private fun generateMonthlyPeriods(startDate: LocalDate, count: Int): List<PayPeriod> {
         return (0 until count).map { i ->
             val periodStart = startDate.plusMonths(i.toLong()).withDayOfMonth(1)
             val periodEnd = periodStart.plusMonths(1).minusDays(1)
-            val payDate = periodEnd.plusDays(5) // Pay 5 days after period end
+            val payDate = periodEnd.plusDays(5)
 
-            PayPeriod(
-                startDate = periodStart,
-                endDate = periodEnd,
-                payDate = payDate
-            )
+            PayPeriod(startDate = periodStart, endDate = periodEnd, payDate = payDate)
         }
     }
 
