@@ -708,16 +708,20 @@ class ExpenseRepository(
         var currentDate = startDate
 
         repeat(count) {
-            // First period: 1st-15th
-            val firstStart = currentDate.withDayOfMonth(1)
-            val firstEnd = currentDate.withDayOfMonth(15)
-            val firstPayDate = firstEnd.plusDays(5)
+            // First period: 26th of previous month to 10th
+            val firstStart = if (currentDate.dayOfMonth <= 10) {
+                currentDate.minusMonths(1).withDayOfMonth(26)
+            } else {
+                currentDate.withDayOfMonth(26)
+            }
+            val firstEnd = currentDate.withDayOfMonth(10)
+            val firstPayDate = firstEnd // Pay date is the 10th
             periods.add(PayPeriod(firstStart, firstEnd, firstPayDate))
 
-            // Second period: 16th-end of month
-            val secondStart = currentDate.withDayOfMonth(16)
-            val secondEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth())
-            val secondPayDate = secondEnd.plusDays(5)
+            // Second period: 11th-25th
+            val secondStart = currentDate.withDayOfMonth(11)
+            val secondEnd = currentDate.withDayOfMonth(25)
+            val secondPayDate = secondEnd // Pay date is the 25th
             periods.add(PayPeriod(secondStart, secondEnd, secondPayDate))
 
             currentDate = currentDate.plusMonths(1)

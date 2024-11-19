@@ -40,7 +40,7 @@ enum class PayFrequency {
 
 data class TaxSettings(
     val federalWithholding: Boolean = false,
-    val federalTaxRate: Double = 22.0, // Default 22%
+    val federalTaxRate: Double = 11.6, // Default 22%
     val stateTaxEnabled: Boolean = false,
     val stateWithholdingPercentage: Double = 0.0,
     val cityTaxEnabled: Boolean = false,

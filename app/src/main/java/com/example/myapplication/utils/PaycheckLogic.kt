@@ -4,74 +4,57 @@ import com.example.myapplication.data.*
 import java.time.Duration
 
 object PaycheckCalculator {
-    private const val MEDICARE_RATE = 0.0145  // 1.45%
-    private const val SOCIAL_SECURITY_RATE = 0.062  // 6.2%
+    private const val MEDICARE_RATE = 0.0133  // 1.45%
+    private const val SOCIAL_SECURITY_RATE = 0.057  // 6.2%
     private const val SOCIAL_SECURITY_WAGE_CAP = 147000.0  // 2024 wage base
 
     fun calculatePaycheck(
         shifts: List<WorkShift>,
         settings: PaySettings
     ): PaycheckCalculation {
-        // Track hours and pay separately for each type
-        var totalRegularHours = 0.0
-        var totalOvertimeHours = 0.0
-        var totalWeekendHours = 0.0
-        var totalNightHours = 0.0
-        var totalPay = 0.0
-
-        // Calculate hourly pay if enabled
-        if (settings.hourlySettings.enabled) {
+        // If both are enabled, prioritize hourly when shifts exist
+        if (settings.hourlySettings.enabled && shifts.isNotEmpty()) {
             val hourlyPay = calculateHourlyPay(
                 shifts = shifts,
                 hourlySettings = settings.hourlySettings,
                 hourlyHours = HourlyHours(
-                    regularHours = totalRegularHours,
-                    overtimeHours = totalOvertimeHours,
-                    weekendHours = totalWeekendHours,
-                    nightHours = totalNightHours
+                    regularHours = 0.0,
+                    overtimeHours = 0.0,
+                    weekendHours = 0.0,
+                    nightHours = 0.0
                 )
             )
 
-            totalPay += hourlyPay.pay
-            totalRegularHours = hourlyPay.hours.regularHours
-            totalOvertimeHours = hourlyPay.hours.overtimeHours
-            totalWeekendHours = hourlyPay.hours.weekendHours
-            totalNightHours = hourlyPay.hours.nightHours
-
-            // Calculate hourly deductions
             val deductions = calculateDeductions(
-                grossPay = totalPay,
+                grossPay = hourlyPay.pay,
                 taxSettings = settings.hourlyTaxSettings,
                 deductions = settings.hourlyDeductions
             )
 
             return PaycheckCalculation(
-                grossPay = totalPay,
-                netPay = totalPay - deductions.values.sum(),
-                regularHours = totalRegularHours,
-                overtimeHours = totalOvertimeHours,
-                weekendHours = totalWeekendHours,
-                nightHours = totalNightHours,
+                grossPay = hourlyPay.pay,
+                netPay = hourlyPay.pay - deductions.values.sum(),
+                regularHours = hourlyPay.hours.regularHours,
+                overtimeHours = hourlyPay.hours.overtimeHours,
+                weekendHours = hourlyPay.hours.weekendHours,
+                nightHours = hourlyPay.hours.nightHours,
                 deductions = deductions
             )
         }
 
-        // Calculate salary pay if enabled
+        // Return salary calculation when no shifts or only salary enabled
         if (settings.salarySettings.enabled) {
             val salaryPay = calculateSalaryPay(settings.salarySettings)
-            totalPay = salaryPay
-
-            // Calculate salary deductions
             val deductions = calculateDeductions(
-                grossPay = totalPay,
+                grossPay = salaryPay,
                 taxSettings = settings.salaryTaxSettings,
                 deductions = settings.salaryDeductions
             )
 
             return PaycheckCalculation(
-                grossPay = totalPay,
-                netPay = totalPay - deductions.values.sum(),
-                regularHours = 0.0, // Salary doesn't track hours
+                grossPay = salaryPay,
+                netPay = salaryPay - deductions.values.sum(),
+                regularHours = 0.0,
                 overtimeHours = 0.0,
                 weekendHours = 0.0,
                 nightHours = 0.0,
@@ -114,6 +97,38 @@ object PaycheckCalculator {
         var weekendHours = hourlyHours.weekendHours
         var nightHours = hourlyHours.nightHours
 
+        // Get overtime threshold based on pay frequency
+        val overtimeThreshold = when (hourlySettings.payFrequency) {
+            PayFrequency.WEEKLY -> 40.0
+            PayFrequency.BI_WEEKLY -> 80.0
+            PayFrequency.SEMI_MONTHLY -> 86.67
+            PayFrequency.MONTHLY -> 173.33
+        }
+
+        // Calculate total regular hours for the period
+        val totalRegularHours = shifts.sumOf { shift ->
+            val (regularShiftHours, nightShiftHours) = calculateShiftHours(
+                shift,
+                hourlySettings.nightShiftStart,
+                hourlySettings.nightShiftEnd
+            )
+            if (!shift.isWeekend) regularShiftHours + nightShiftHours else 0.0
+        }
+
+        // Calculate overtime if total hours exceed threshold
+        if (totalRegularHours > overtimeThreshold) {
+            regularHours = overtimeThreshold
+            overtimeHours = totalRegularHours - overtimeThreshold
+        } else {
+            regularHours = totalRegularHours
+            overtimeHours = 0.0
+        }
+
+        // Calculate pay for regular and overtime hours
+        totalPay += regularHours * hourlySettings.baseRate
+        totalPay += overtimeHours * hourlySettings.baseRate * hourlySettings.overtimeMultiplier
+
+        // Add weekend and night differential pay
         shifts.forEach { shift ->
             val (regularShiftHours, nightShiftHours) = calculateShiftHours(
                 shift,
@@ -124,24 +139,11 @@ object PaycheckCalculator {
             if (shift.isWeekend) {
                 weekendHours += (regularShiftHours + nightShiftHours)
                 totalPay += weekendHours * hourlySettings.weekendRate
-            } else {
-                // Add regular hours up to 40
-                val remainingRegularHours = 40.0 - regularHours
-                if (regularShiftHours <= remainingRegularHours) {
-                    regularHours += regularShiftHours
-                    totalPay += regularShiftHours * hourlySettings.baseRate
-                } else {
-                    regularHours += remainingRegularHours
-                    overtimeHours += regularShiftHours - remainingRegularHours
-                    totalPay += remainingRegularHours * hourlySettings.baseRate +
-                            (regularShiftHours - remainingRegularHours) *
-                            hourlySettings.baseRate *
-                            hourlySettings.overtimeMultiplier
-                }
+            }
 
-                // Add night differential hours
+            if (!shift.isWeekend) {
                 nightHours += nightShiftHours
-                totalPay += nightShiftHours * (hourlySettings.baseRate + hourlySettings.nightDifferential)
+                totalPay += nightShiftHours * hourlySettings.nightDifferential
             }
         }
 

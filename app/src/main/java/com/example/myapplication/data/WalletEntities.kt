@@ -26,7 +26,7 @@ data class SalaryTaxSettingsEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val federalWithholding: Boolean = false,
-    val federalTaxRate: Double = 22.0,
+    val federalTaxRate: Double = 11.6,
     val stateTaxEnabled: Boolean = false,
     val stateWithholdingPercentage: Double = 0.0,
     val cityTaxEnabled: Boolean = false,
@@ -40,7 +40,7 @@ data class HourlyTaxSettingsEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val federalWithholding: Boolean = false,
-    val federalTaxRate: Double = 22.0,
+    val federalTaxRate: Double = 11.6,
     val stateTaxEnabled: Boolean = false,
     val stateWithholdingPercentage: Double = 0.0,
     val cityTaxEnabled: Boolean = false,

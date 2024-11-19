@@ -5,6 +5,7 @@ package com.example.myapplication.ui.screens
 //noinspection UsingMaterialAndMaterial3Libraries
 //noinspection UsingMaterialAndMaterial3Libraries
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -186,126 +187,137 @@ private fun PaychecksSection(viewModel: WalletViewModel) {
         """.trimIndent())
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Tab Row for switching between Salary and Hourly views
-        if (settings.salarySettings.enabled && settings.hourlySettings.enabled) {
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                modifier = Modifier.fillMaxWidth()
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fixed header section with tabs and summary
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 }
-                ) {
-                    Text(
-                        text = "Combined",
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
+                // Tab Row
+                if (settings.salarySettings.enabled && settings.hourlySettings.enabled) {
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Tab(
+                            selected = selectedTabIndex == 0,
+                            onClick = { selectedTabIndex = 0 }
+                        ) {
+                            Text(
+                                text = "Combined",
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
+                        Tab(
+                            selected = selectedTabIndex == 1,
+                            onClick = { selectedTabIndex = 1 }
+                        ) {
+                            Text(
+                                text = "Salary",
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
+                        Tab(
+                            selected = selectedTabIndex == 2,
+                            onClick = { selectedTabIndex = 2 }
+                        ) {
+                            Text(
+                                text = "Hourly",
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
+                    }
                 }
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 }
+
+                // Summary Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Text(
-                        text = "Salary",
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
-                }
-                Tab(
-                    selected = selectedTabIndex == 2,
-                    onClick = { selectedTabIndex = 2 }
-                ) {
-                    Text(
-                        text = "Hourly",
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Pay Summary",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val totalPay = paychecks.sumOf { it.grossPay }
+                        val totalNetPay = paychecks.sumOf { it.netPay }
+
+                        PaySummaryRow("Gross Pay", totalPay)
+                        PaySummaryRow("Net Pay", totalNetPay)
+
+                        if (settings.hourlySettings.enabled) {
+                            Divider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(
+                                text = "Hours Breakdown",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            val totalRegularHours = paychecks.sumOf { it.regularHours }
+                            val totalOvertimeHours = paychecks.sumOf { it.overtimeHours }
+                            val totalWeekendHours = paychecks.sumOf { it.weekendHours }
+                            val totalNightHours = paychecks.sumOf { it.nightHours }
+
+                            HoursSummaryRow("Regular Hours", totalRegularHours)
+                            HoursSummaryRow("Overtime Hours", totalOvertimeHours)
+                            HoursSummaryRow("Weekend Hours", totalWeekendHours)
+                            HoursSummaryRow("Night Hours", totalNightHours)
+                        }
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
 
-        // Summary Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            // Scrollable content section
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
                 Text(
-                    text = "Pay Summary",
+                    text = "Upcoming Paychecks",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
-                val totalPay = paychecks.sumOf { it.grossPay }
-                val totalNetPay = paychecks.sumOf { it.netPay }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 80.dp), // Add padding for bottom navigation
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val filteredPaychecks = when (selectedTabIndex) {
+                        1 -> paychecks.filter { paycheck ->
+                            paycheck.regularHours == 0.0 &&
+                                    paycheck.overtimeHours == 0.0 &&
+                                    paycheck.weekendHours == 0.0 &&
+                                    paycheck.nightHours == 0.0 &&
+                                    settings.salarySettings.enabled
+                        }
+                        2 -> paychecks.filter { paycheck ->
+                            (paycheck.regularHours > 0.0 ||
+                                    paycheck.overtimeHours > 0.0 ||
+                                    paycheck.weekendHours > 0.0 ||
+                                    paycheck.nightHours > 0.0) &&
+                                    settings.hourlySettings.enabled
+                        }
+                        else -> paychecks
+                    }
 
-                PaySummaryRow("Gross Pay", totalPay)
-                PaySummaryRow("Net Pay", totalNetPay)
-
-                if (settings.hourlySettings.enabled) {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text(
-                        text = "Hours Breakdown",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    val totalRegularHours = paychecks.sumOf { it.regularHours }
-                    val totalOvertimeHours = paychecks.sumOf { it.overtimeHours }
-                    val totalWeekendHours = paychecks.sumOf { it.weekendHours }
-                    val totalNightHours = paychecks.sumOf { it.nightHours }
-
-                    HoursSummaryRow("Regular Hours", totalRegularHours)
-                    HoursSummaryRow("Overtime Hours", totalOvertimeHours)
-                    HoursSummaryRow("Weekend Hours", totalWeekendHours)
-                    HoursSummaryRow("Night Hours", totalNightHours)
+                    items(filteredPaychecks) { paycheck ->
+                        PaycheckCard(
+                            paycheck = paycheck,
+                            showHourlyDetails = settings.hourlySettings.enabled
+                        )
+                    }
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Paychecks List
-        Text(
-            text = "Upcoming Paychecks",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val filteredPaychecks = when (selectedTabIndex) {
-                1 -> paychecks.filter { paycheck ->
-                    // It's a salary paycheck if it has no hourly components
-                    paycheck.regularHours == 0.0 &&
-                            paycheck.overtimeHours == 0.0 &&
-                            paycheck.weekendHours == 0.0 &&
-                            paycheck.nightHours == 0.0
-                }
-                2 -> paychecks.filter { paycheck ->
-                    // It's an hourly paycheck if it has any hourly components
-                    paycheck.regularHours > 0.0 ||
-                            paycheck.overtimeHours > 0.0 ||
-                            paycheck.weekendHours > 0.0 ||
-                            paycheck.nightHours > 0.0
-                }
-                else -> paychecks
-            }
-
-            items(filteredPaychecks) { paycheck ->
-                PaycheckCard(
-                    paycheck = paycheck,
-                    showHourlyDetails = settings.hourlySettings.enabled
-                )
             }
         }
     }

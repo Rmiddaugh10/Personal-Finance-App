@@ -35,8 +35,8 @@ data class WorkShift(
 data class TaxInfo(
     val federalWithholding: Double,
     val stateWithholding: Double,
-    val socialSecurity: Double = 0.062, // 6.2% default
-    val medicare: Double = 0.0145, // 1.45% default
+    val socialSecurity: Double = 0.057, // 5.7% default
+    val medicare: Double = 0.0133, // 1.33% default
     val additionalDeductions: Map<String, Double>
 )
 

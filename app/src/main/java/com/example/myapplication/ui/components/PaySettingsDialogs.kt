@@ -129,6 +129,41 @@ fun TaxSettingsDialog(
                     }
                 }
 
+                // City Tax Section
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("City Tax")
+                        Switch(
+                            checked = currentSettings.cityTaxEnabled,
+                            onCheckedChange = { enabled ->
+                                updateSettings(currentSettings.copy(cityTaxEnabled = enabled))
+                            }
+                        )
+                    }
+                    if (currentSettings.cityTaxEnabled) {
+                        OutlinedTextField(
+                            value = currentSettings.cityWithholdingPercentage.toString(),
+                            onValueChange = { value ->
+                                val percentage = value.toDoubleOrNull() ?: currentSettings.cityWithholdingPercentage
+                                updateSettings(currentSettings.copy(cityWithholdingPercentage = percentage))
+                            },
+                            label = { Text("City Tax Rate") },
+                            suffix = { Text("%") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        )
+                    }
+                }
+
+
                 // Fixed Rate Taxes
                 Card(
                     modifier = Modifier
@@ -155,7 +190,7 @@ fun TaxSettingsDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Medicare (1.45%)")
+                            Text("Medicare (1.33%)")
                             Switch(
                                 checked = currentSettings.medicareTaxEnabled,
                                 onCheckedChange = { enabled ->
@@ -173,7 +208,7 @@ fun TaxSettingsDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Social Security (6.2%)")
+                                Text("Social Security (5.7%)")
                                 Switch(
                                     checked = currentSettings.socialSecurityTaxEnabled,
                                     onCheckedChange = { enabled ->
