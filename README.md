@@ -1,4 +1,4 @@
-Personal Finance App
+Personal Finance App /n
 A comprehensive Android finance management application built with Kotlin and Jetpack Compose that helps users track expenses, manage budgets, and monitor financial goals.
 Key Features:
 
