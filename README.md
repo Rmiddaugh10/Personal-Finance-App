@@ -1,17 +1,64 @@
 # Personal Finance App
 
-A comprehensive Android finance management application built with Kotlin and Jetpack Compose that helps users track expenses, manage budgets, and monitor financial goals.
+A comprehensive Android finance tracking application built with Kotlin and Jetpack Compose that helps users manage finances, track budgets, and monitor spending patterns. Currently in active development with planned feature expansions.
 
-### Key Features:
-- Import bank transactions via CSV
-- Create and manage budget categories
-- Track expenses against budgets
-- Visual budget vs. actual analysis
-- Cash transaction management
-- Multiple account tracking
-- Paycheck calculator with tax estimations
-- Work schedule management
-- Customizable deductions and tax settings
+### Current Core Features:
+- CSV bank statement import with automatic transaction categorization
+- Custom budget category creation and management
+- Real-time budget vs. actual spending analysis
+- Paycheck calculator with comprehensive tax handling
+- Work schedule tracking with automated wage calculations
+- Multi-account balance tracking
+- Customizable tax settings and deductions management
+
+### In Development:
+- Database optimization for year transitions
+- Data persistence improvements
+- Category pattern matching refinement
+- Enhanced filtering system
+
+### Planned Features:
+1. Banking Integration:
+- Direct bank API connections
+- Real-time transaction updates
+- Automated account balance syncing
+
+2. Enhanced Analytics:
+- Spending pattern analysis
+- Trend visualization
+- Predictive budget recommendations
+- Investment tracking
+- Custom report generation
+
+3. Smart Features:
+- Push notifications for:
+  - Budget thresholds
+  - Bill reminders
+  - Unusual spending patterns
+  - Upcoming paycheck estimates
+- Bill payment tracking
+- Savings goals
+- Debt management tools
+
+4. System Improvements:
+- Performance optimization for large datasets
+- Enhanced backup and restore functionality
+- Cross-device sync capabilities
+- Export functionality for tax preparation
+
+### Technical Roadmap:
+- Implementation of WorkManager for background processing
+- Enhanced error handling and recovery
+- UI/UX refinements
+- Expanded test coverage
+- Security enhancements
+
+### Known Issues:
+- Year transition data display bugs
+- Filter persistence challenges
+- Category update propagation delays
+
+Open to community contributions and feature suggestions. Project follows MVVM architecture with Clean Architecture principles for maintainability and scalability.
 
 ## Screenshots & Features
 
