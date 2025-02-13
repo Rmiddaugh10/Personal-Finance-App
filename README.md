@@ -2,6 +2,23 @@
 
 A comprehensive Android finance tracking application built with Kotlin and Jetpack Compose that helps users manage finances, track budgets, and monitor spending patterns. Currently in active development with planned feature expansions.
 
+### Author
+Robert Lee Middaugh II
+- Email: hguaddim@gmail.com
+- GitHub: [Rmiddaugh10](https://github.com/Rmiddaugh10)
+
+## License
+This project is licensed under the MIT License.
+
+Copyright (c) 2024 Robert Lee Middaugh II
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
 ### Current Core Features:
 - CSV bank statement import with automatic transaction categorization
 - Custom budget category creation and management
@@ -58,7 +75,20 @@ A comprehensive Android finance tracking application built with Kotlin and Jetpa
 - Filter persistence challenges
 - Category update propagation delays
 
-Open to community contributions and feature suggestions. Project follows MVVM architecture with Clean Architecture principles for maintainability and scalability.
+## Contact & Support
+For bug reports, feature requests, or general inquiries:
+- Open an issue on GitHub
+- Email: hguaddim@gmail.com
+- Project Link: [Personal Finance App Repository](https://github.com/Rmiddaugh10/personal-finance-app)
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## Screenshots & Features
 
