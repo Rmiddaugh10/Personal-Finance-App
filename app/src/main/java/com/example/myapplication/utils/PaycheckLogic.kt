@@ -4,9 +4,9 @@ import com.example.myapplication.data.*
 import java.time.Duration
 
 object PaycheckCalculator {
-    private const val MEDICARE_RATE = 0.0133  // 1.45%
-    private const val SOCIAL_SECURITY_RATE = 0.057  // 6.2%
-    private const val SOCIAL_SECURITY_WAGE_CAP = 147000.0  // 2024 wage base
+    private const val MEDICARE_RATE = 0.0145  // 1.45%
+    private const val SOCIAL_SECURITY_RATE = 0.062  // 6.2%
+    private const val SOCIAL_SECURITY_WAGE_CAP = 168600.0  // 2024 wage base
 
     fun calculatePaycheck(
         shifts: List<WorkShift>,
@@ -28,7 +28,8 @@ object PaycheckCalculator {
             val deductions = calculateDeductions(
                 grossPay = hourlyPay.pay,
                 taxSettings = settings.hourlyTaxSettings,
-                deductions = settings.hourlyDeductions
+                deductions = settings.hourlyDeductions,
+                payFrequency = settings.hourlySettings.payFrequency
             )
 
             return PaycheckCalculation(
@@ -48,7 +49,8 @@ object PaycheckCalculator {
             val deductions = calculateDeductions(
                 grossPay = salaryPay,
                 taxSettings = settings.salaryTaxSettings,
-                deductions = settings.salaryDeductions
+                deductions = settings.salaryDeductions,
+                payFrequency = settings.salarySettings.payFrequency
             )
 
             return PaycheckCalculation(
@@ -137,8 +139,9 @@ object PaycheckCalculator {
             )
 
             if (shift.isWeekend) {
-                weekendHours += (regularShiftHours + nightShiftHours)
-                totalPay += weekendHours * hourlySettings.weekendRate
+                val shiftWeekendHours = regularShiftHours + nightShiftHours
+                weekendHours += shiftWeekendHours
+                totalPay += shiftWeekendHours * hourlySettings.weekendRate
             }
 
             if (!shift.isWeekend) {
@@ -209,7 +212,8 @@ object PaycheckCalculator {
     private fun calculateDeductions(
         grossPay: Double,
         taxSettings: TaxSettings,
-        deductions: List<Deduction>
+        deductions: List<Deduction>,
+        payFrequency: PayFrequency = PayFrequency.SEMI_MONTHLY
     ): Map<String, Double> {
         val result = mutableMapOf<String, Double>()
 
@@ -239,12 +243,21 @@ object PaycheckCalculator {
             result["Social Security"] = socialSecurityWages * SOCIAL_SECURITY_RATE
         }
 
+        // Paychecks per year by frequency
+        val paychecksPerYear = when (payFrequency) {
+            PayFrequency.WEEKLY -> 52
+            PayFrequency.BI_WEEKLY -> 26
+            PayFrequency.SEMI_MONTHLY -> 24
+            PayFrequency.MONTHLY -> 12
+        }
+        val paychecksPerMonth = paychecksPerYear / 12.0
+
         // Custom deductions
         deductions.forEach { deduction ->
             val amount = when (deduction.frequency) {
                 DeductionFrequency.PER_PAYCHECK -> deduction.amount
-                DeductionFrequency.MONTHLY -> deduction.amount / 2  // Assuming semi-monthly pay
-                DeductionFrequency.ANNUAL -> deduction.amount / 24  // Assuming semi-monthly pay
+                DeductionFrequency.MONTHLY -> deduction.amount / paychecksPerMonth
+                DeductionFrequency.ANNUAL -> deduction.amount / paychecksPerYear
             }
             result[deduction.name] = amount
         }
