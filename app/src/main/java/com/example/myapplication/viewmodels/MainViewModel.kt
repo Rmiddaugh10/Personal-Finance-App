@@ -98,6 +98,8 @@ class MainViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
         // Launch other initializations
         viewModelScope.launch {
+            // Seed budget rows for the current year if missing (year-rollover fix)
+            repository.ensureYearBudgetsExist(LocalDate.now().year)
             loadExpenses()
             loadCategories()
             initializeBudgetComparisons()

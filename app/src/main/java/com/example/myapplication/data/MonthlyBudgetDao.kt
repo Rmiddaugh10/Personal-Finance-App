@@ -109,4 +109,8 @@ interface MonthlyBudgetDao {
     // Add cleanup method
     @Query("DELETE FROM monthly_budgets WHERE year = :year AND month = :month")
     suspend fun clearBudgetsByMonth(year: Int, month: Int)
+
+    // Check if any budgets exist for a given year (used for year-rollover detection)
+    @Query("SELECT COUNT(*) FROM monthly_budgets WHERE year = :year")
+    suspend fun getBudgetCountForYear(year: Int): Int
 }

@@ -656,6 +656,28 @@ class ExpenseRepository(
         }
     }
 
+    /**
+     * Called on every app startup. If no monthly budget rows exist for [year],
+     * seeds them from the category templates and recalculates comparisons.
+     * This fixes the year-rollover data-loss bug where all budget/comparison
+     * data appeared blank after January 1st.
+     */
+    suspend fun ensureYearBudgetsExist(year: Int) {
+        val count = monthlyBudgetDao.getBudgetCountForYear(year)
+        if (count == 0) {
+            Log.i("ExpenseRepository", "No budgets found for year $year — seeding from templates")
+            monthlyBudgetDao.generateYearlyBudget(year)
+            for (month in 1..12) {
+                budgetComparisonDao.calculateAndStoreBudgetComparisons(
+                    expenseDao = expenseDao,
+                    budgetCategoryDao = budgetCategoryDao,
+                    year = year,
+                    month = month
+                )
+            }
+        }
+    }
+
     suspend fun getWalletBalance(): WalletBalance? {
         return try {
             walletDao.getLatestBalance().first()?.let { entity ->
